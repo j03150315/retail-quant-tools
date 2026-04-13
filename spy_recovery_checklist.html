@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPY Recovery Checklist</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff;
+    --bg-secondary: #f5f4ef;
+    --bg-success: #eaf3de;
+    --bg-warning: #faeeda;
+    --bg-danger: #fcebeb;
+    --bg-info: #e6f1fb;
+    --text-primary: #1a1a18;
+    --text-secondary: #5f5e5a;
+    --text-tertiary: #888780;
+    --text-success: #27500a;
+    --text-warning: #633806;
+    --text-danger: #791f1f;
+    --text-info: #0c447c;
+    --border: rgba(0,0,0,0.12);
+    --border-secondary: rgba(0,0,0,0.22);
+    --border-success: rgba(59,109,17,0.4);
+    --border-warning: rgba(133,79,11,0.4);
+    --border-danger: rgba(163,45,45,0.4);
+    --border-info: rgba(24,95,165,0.4);
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --font: -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a;
+      --bg-secondary: #252522;
+      --bg-success: #173404;
+      --bg-warning: #412402;
+      --bg-danger: #501313;
+      --bg-info: #042c53;
+      --text-primary: #e8e6dc;
+      --text-secondary: #9c9a92;
+      --text-tertiary: #6b6963;
+      --text-success: #c0dd97;
+      --text-warning: #fac775;
+      --text-danger: #f09595;
+      --text-info: #85b7eb;
+      --border: rgba(255,255,255,0.1);
+      --border-secondary: rgba(255,255,255,0.2);
+      --border-success: rgba(192,221,151,0.3);
+      --border-warning: rgba(250,199,117,0.3);
+      --border-danger: rgba(240,149,149,0.3);
+      --border-info: rgba(133,183,235,0.3);
+    }
+  }
+  body { font-family: var(--font); background: var(--bg); color: var(--text-primary); padding: 2rem 1.25rem; max-width: 640px; margin: 0 auto; line-height: 1.6; }
+  h1 { font-size: 18px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: var(--text-secondary); margin-bottom: 1.5rem; }
+  .metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-bottom: 1.25rem; }
+  .metric-card { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 0.75rem 1rem; }
+  .metric-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+  .metric-value { font-size: 22px; font-weight: 500; color: var(--text-primary); }
+  .score-bar-bg { background: var(--bg-secondary); border-radius: 6px; height: 8px; overflow: hidden; margin: 6px 0 4px; }
+  .score-bar-fill { height: 100%; border-radius: 6px; transition: width 0.4s, background 0.4s; }
+  .section-label { font-size: 11px; font-weight: 500; color: var(--text-tertiary); letter-spacing: 0.06em; text-transform: uppercase; margin: 1.5rem 0 8px; }
+  .signal-card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 10px; display: flex; align-items: flex-start; gap: 14px; cursor: pointer; transition: background 0.15s; user-select: none; }
+  .signal-card:hover { background: var(--bg-secondary); }
+  .signal-card.checked { border-color: var(--border-success); background: var(--bg-success); }
+  .signal-card.primary-signal { border-left: 3px solid var(--border-info); border-radius: 0 var(--radius-lg) var(--radius-lg) 0; }
+  .signal-card.primary-signal.checked { border-left-color: var(--border-success); }
+  .check-box { width: 20px; height: 20px; min-width: 20px; border-radius: 6px; border: 1.5px solid var(--border-secondary); display: flex; align-items: center; justify-content: center; margin-top: 2px; transition: all 0.15s; background: var(--bg); }
+  .signal-card.checked .check-box { background: var(--bg-success); border-color: var(--border-success); }
+  .check-mark { width: 10px; height: 6px; border-left: 2px solid var(--text-success); border-bottom: 2px solid var(--text-success); transform: rotate(-45deg) translate(1px, -1px); display: none; }
+  .signal-card.checked .check-mark { display: block; }
+  .signal-title { font-size: 14px; font-weight: 500; color: var(--text-primary); margin: 0 0 3px; }
+  .signal-desc { font-size: 12px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; margin-left: 6px; font-weight: 400; background: var(--bg-info); color: var(--text-info); }
+  .verdict-box { border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-top: 1.25rem; border: 0.5px solid var(--border); background: var(--bg-secondary); }
+  .verdict-text { margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+  .actions { margin-top: 1rem; display: flex; gap: 10px; flex-wrap: wrap; }
+  button { font-family: var(--font); font-size: 13px; padding: 7px 14px; border-radius: var(--radius-md); border: 0.5px solid var(--border-secondary); background: transparent; color: var(--text-primary); cursor: pointer; transition: background 0.15s; }
+  button:hover { background: var(--bg-secondary); }
+  button:active { transform: scale(0.98); }
+  .footer { margin-top: 2rem; font-size: 11px; color: var(--text-tertiary); border-top: 0.5px solid var(--border); padding-top: 1rem; }
+</style>
+</head>
+<body>
+
+<h1>SPY recovery signal checklist</h1>
+<p class="subtitle">Weekly check — tick what's currently true to assess market re-entry readiness.</p>
+
+<div class="metric-grid">
+  <div class="metric-card">
+    <div class="metric-label">Signals checked</div>
+    <div class="metric-value" id="score-num">0 / 7</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Confidence</div>
+    <div class="metric-value" id="confidence-label" style="color: var(--text-secondary);">—</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">Must-have met</div>
+    <div class="metric-value" id="musthave-label" style="color: var(--text-secondary);">—</div>
+  </div>
+</div>
+
+<div class="score-bar-bg"><div id="score-bar" class="score-bar-fill" style="width:0%; background: var(--border);"></div></div>
+
+<div class="section-label">Must-have — do not enter without this</div>
+
+<div class="signal-card primary-signal" id="c0" onclick="toggle(0)">
+  <div class="check-box"><div class="check-mark"></div></div>
+  <div>
+    <p class="signal-title">SPY above 200-day SMA <span class="badge">must-have</span></p>
+    <p class="signal-desc">SPY's closing price is above its 200-day simple moving average, and has held there for at least 2–3 consecutive days — not just a single-day spike.</p>
+  </div>
+</div>
+
+<div class="section-label">Supporting signals — the more, the better</div>
+
+<div class="signal-card" id="c1" onclick="toggle(1)">
+  <div class="check-box"><div class="check-mark"></div></div>
+  <div>
+    <p class="signal-title">50-day SMA flattening or rising</p>
+    <p class="signal-desc">The 50-day moving average has stopped declining and is starting to flatten out or curl upward. Signals short-term trend stabilization.</p>
+  </div>
+</div>
+
+<div class="signal-card" id="c2" onclick="toggle(2)">
+  <div class="check-box"><div class="check-mark"></div></div>
+  <div>
+    <p class="signal-title">Breadth confirms rally</p>
+    <p class="signal-desc">More than 50% of S&P 500 stocks are above their own 50-day SMA. Rules out a "hollow" rally driven only by a few large tech stocks. (Check $SPXA50R on StockCharts.)</p>
+  </div>
+</div>
+
+<div class="signal-card" id="c3" onclick="toggle(3)">
+  <div class="check-box"><div class="check-mark"></div></div>
+  <div>
+    <p class="signal-title">VIX below 20 and declining</p>
+    <p class="signal-desc">The CBOE Volatility Index (fear gauge) has fallen below 20 and isn't spiking back up. Elevated VIX above 25–30 signals ongoing stress.</p>
+  </div>
+</div>
+
+<div class="signal-card" id="c4" onclick="toggle(4)">
+  <div class="check-box"><div class="check-mark"></div></div>
+  <div>
+    <p class="signal-title">Higher volume on up days</p>
+    <p class="signal-desc">Green days are seeing noticeably more trading volume than red days in recent weeks. Suggests institutions are buying, not just retail bouncing.</p>
+  </div>
+</div>
+
+<div class="signal-card" id="c5" onclick="toggle(5)">
+  <div class="check-box"><div class="check-mark"></div></div>
+  <div>
+    <p class="signal-title">200-day SMA held on retest</p>
+    <p class="signal-desc">After crossing above the 200-day SMA, SPY pulled back to test it and held. Former resistance confirmed as support — a cleaner, lower-risk entry point.</p>
+  </div>
+</div>
+
+<div class="signal-card" id="c6" onclick="toggle(6)">
+  <div class="check-box"><div class="check-mark"></div></div>
+  <div>
+    <p class="signal-title">Credit spreads narrowing</p>
+    <p class="signal-desc">High-yield bond spreads are contracting, not widening. Bond markets tend to lead equities — narrowing spreads signal reduced financial stress. (Check HYG or FRED: "ICE BofA High Yield Spread".)</p>
+  </div>
+</div>
+
+<div id="verdict-box" class="verdict-box">
+  <p id="verdict-text" class="verdict-text">Check signals above to see your readout.</p>
+</div>
+
+<div class="actions">
+  <button onclick="resetAll()">Reset all</button>
+</div>
+
+<div class="footer">EOD_Trend_V1 companion tool &middot; For longer-term investing context only &middot; Not financial advice</div>
+
+<script>
+const state = [false,false,false,false,false,false,false];
+
+function toggle(i) {
+  state[i] = !state[i];
+  document.getElementById('c' + i).classList.toggle('checked', state[i]);
+  update();
+}
+
+function resetAll() {
+  for (let i = 0; i < 7; i++) { state[i] = false; document.getElementById('c'+i).classList.remove('checked'); }
+  update();
+}
+
+function update() {
+  const total = state.filter(Boolean).length;
+  const mustHave = state[0];
+  document.getElementById('score-num').textContent = total + ' / 7';
+  const pct = Math.round((total / 7) * 100);
+  const bar = document.getElementById('score-bar');
+  bar.style.width = pct + '%';
+  bar.style.background = pct === 0 ? 'var(--border)' : pct < 30 ? '#E24B4A' : pct < 60 ? '#BA7517' : pct < 85 ? '#378ADD' : '#639922';
+
+  const mhEl = document.getElementById('musthave-label');
+  mhEl.textContent = mustHave ? 'Yes' : (total > 0 ? 'No' : '—');
+  mhEl.style.color = mustHave ? 'var(--text-success)' : (total > 0 ? 'var(--text-danger)' : 'var(--text-secondary)');
+
+  const confidenceLabels = ['—', 'Not ready', 'Early signs', 'Moderate', 'High'];
+  const ci = total === 0 ? 0 : !mustHave ? 1 : total <= 3 ? 2 : total <= 5 ? 3 : 4;
+  const confEl = document.getElementById('confidence-label');
+  confEl.textContent = confidenceLabels[ci];
+  confEl.style.color = ['var(--text-secondary)','var(--text-danger)','var(--text-warning)','var(--text-info)','var(--text-success)'][ci];
+
+  const verdicts = [
+    { bg: 'var(--bg-secondary)', border: 'var(--border)', color: 'var(--text-secondary)', text: "Check signals above to see your readout." },
+    { bg: 'var(--bg-danger)', border: 'var(--border-danger)', color: 'var(--text-danger)', text: "Not ready yet. The must-have signal (SPY above 200-day SMA) isn't confirmed. Stay patient — entering early in a downtrend is the most common investing mistake." },
+    { bg: 'var(--bg-warning)', border: 'var(--border-warning)', color: 'var(--text-warning)', text: "Early signs. The must-have is met, but only a couple of supporting signals confirm. Consider a small first entry (e.g. 25% of intended position) via dollar-cost averaging. Watch for more confirmation." },
+    { bg: 'var(--bg-info)', border: 'var(--border-info)', color: 'var(--text-info)', text: "Moderate confidence. The must-have plus several supporting signals are aligned. A reasonable environment to begin building a position gradually. Don't go all-in — conditions can still reverse." },
+    { bg: 'var(--bg-success)', border: 'var(--border-success)', color: 'var(--text-success)', text: "High confidence. Strong alignment across signals. This is the cleaner, lower-risk entry environment. A steady, phased deployment of capital makes sense here." },
+  ];
+
+  const v = verdicts[ci];
+  const vbox = document.getElementById('verdict-box');
+  vbox.style.background = v.bg;
+  vbox.style.borderColor = v.border;
+  const vtext = document.getElementById('verdict-text');
+  vtext.textContent = v.text;
+  vtext.style.color = v.color;
+}
+</script>
+</body>
+</html>
