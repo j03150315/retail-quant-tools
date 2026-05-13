@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Social Dispatcher — Retail Quant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --cream: #F5EFE3;
+      --cream-dark: #EDE5D4;
+      --surface: #FDFAF5;
+      --border: #DDD5C4;
+      --terracotta: #C4622D;
+      --terracotta-hover: #D4724D;
+      --green: #2D5A27;
+      --dark: #1C1714;
+      --mid: #6B5B4E;
+      --light: #9E8E7E;
+      --error: #B84040;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--cream);
+      font-family: 'DM Sans', sans-serif;
+      color: var(--dark);
+      min-height: 100vh;
+      padding: 3rem 1.5rem;
+    }
+
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    .header { margin-bottom: 2.5rem; }
+
+    .header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 24px;
+      font-weight: 500;
+      color: var(--dark);
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+
+    .header .tagline {
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: 13px;
+      color: var(--mid);
+      margin-top: 5px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1.25rem;
+      margin-bottom: 10px;
+    }
+
+    .card-label {
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--light);
+      margin-bottom: 10px;
+    }
+
+    .webhook-row { display: flex; gap: 8px; }
+
+    input[type="url"] {
+      flex: 1;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13.5px;
+      background: var(--cream);
+      color: var(--dark);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="url"]:focus { border-color: var(--terracotta); }
+    input[type="url"]::placeholder { color: var(--light); }
+
+    .btn-secondary {
+      padding: 9px 16px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: transparent;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13.5px;
+      color: var(--mid);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-secondary:hover { border-color: var(--terracotta); color: var(--terracotta); }
+
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12.5px;
+      line-height: 1.65;
+      background: var(--cream);
+      color: var(--dark);
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    textarea:focus { border-color: var(--terracotta); }
+    textarea::placeholder { color: var(--light); }
+
+    .platform-item {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      margin-bottom: 6px;
+      overflow: hidden;
+    }
+
+    .platform-hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: var(--cream);
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+
+    .platform-hdr:hover { background: var(--cream-dark); }
+
+    .platform-name {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--mid);
+    }
+
+    .platform-status { font-size: 12px; color: var(--green); }
+    .platform-status.empty { color: var(--light); }
+
+    .platform-body {
+      display: none;
+      padding: 12px 14px;
+      font-size: 13px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      color: var(--dark);
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .platform-body.open { display: block; }
+
+    .send-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 12px;
+    }
+
+    .btn-primary {
+      padding: 10px 24px;
+      background: var(--terracotta);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn-primary:hover { background: var(--terracotta-hover); }
+
+    .btn-primary:disabled {
+      background: var(--border);
+      color: var(--light);
+      cursor: not-allowed;
+    }
+
+    .status-msg { font-size: 13px; color: var(--mid); }
+    .status-msg.ok { color: var(--green); }
+    .status-msg.err { color: var(--error); }
+
+    .footer {
+      text-align: center;
+      margin-top: 3rem;
+      font-family: 'Playfair Display', serif;
+      font-style: italic;
+      font-size: 12px;
+      color: var(--light);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="header">
+      <h1>Retail Quant</h1>
+      <p class="tagline">Cash is also a position.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Make.com webhook URL</div>
+      <div class="webhook-row">
+        <input type="url" id="webhookUrl" placeholder="https://hook.us1.make.com/your-webhook-id">
+        <button class="btn-secondary" id="saveBtn" onclick="saveWebhook()">Save</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Paste Claude output</div>
+      <textarea id="pasteArea" placeholder="Paste the full Claude social copy output here..." oninput="handlePaste()"></textarea>
+    </div>
+
+    <div id="previewSection" style="display:none">
+      <div class="card">
+        <div class="card-label">Parsed preview — click any row to expand</div>
+        <div id="platformList"></div>
+      </div>
+      <div class="send-row">
+        <button class="btn-primary" id="sendBtn" onclick="sendToMake()">Send to Make →</button>
+        <span class="status-msg" id="statusMsg"></span>
+      </div>
+    </div>
+
+    <div class="footer">Cash is also a position.</div>
+  </div>
+
+  <script>
+    window.addEventListener('load', () => {
+      try {
+        const saved = localStorage.getItem('rq_webhook_url');
+        if (saved) document.getElementById('webhookUrl').value = saved;
+      } catch(e) {}
+    });
+
+    function saveWebhook() {
+      const url = document.getElementById('webhookUrl').value.trim();
+      try { localStorage.setItem('rq_webhook_url', url); } catch(e) {}
+      const btn = document.getElementById('saveBtn');
+      const orig = btn.textContent;
+      btn.textContent = 'Saved ✓';
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+    }
+
+    function parseOutput(text) {
+      const sections = {};
+      const parts = text.split(/\n?---\s*([a-zA-Z(][^\n-]*?)\s*---\n?/);
+      for (let i = 1; i < parts.length; i += 2) {
+        const label = parts[i].trim();
+        const content = (parts[i + 1] || '').trim();
+        if (label) sections[label] = content;
+      }
+      return sections;
+    }
+
+    function mapSections(s) {
+      const r = {};
+
+      r.substack_notes = s['SUBSTACK NOTES'] || '';
+
+      if (s['X.COM']) {
+        const x = s['X.COM'];
+        const m = x.match(/\(Reply with the article link:\s*(.+?)\)/s);
+        r.x_reply_link = m ? m[1].trim() : '';
+        r.x_tweet = x.replace(/\(Reply with the article link:[\s\S]*?\)/, '').trim();
+      } else {
+        r.x_tweet = '';
+        r.x_reply_link = '';
+      }
+
+      if (s['INSTAGRAM']) {
+        const lines = s['INSTAGRAM'].split('\n');
+        const cap = [], tags = [];
+        let inTags = false;
+        for (const line of lines) {
+          if (!inTags && line.trim().match(/^#\w/)) inTags = true;
+          (inTags ? tags : cap).push(line);
+        }
+        r.instagram_caption = cap.join('\n').trim();
+        r.instagram_hashtags = tags.map(l => l.trim()).filter(Boolean).join(' ');
+      } else {
+        r.instagram_caption = '';
+        r.instagram_hashtags = '';
+      }
+
+      r.threads = s['THREADS'] || '';
+      r.facebook = s['FACEBOOK PAGE'] || '';
+
+      if (s['REDDIT (personal page)']) {
+        const rd = s['REDDIT (personal page)'];
+        const tm = rd.match(/^Title:\s*(.+?)$/m);
+        r.reddit_title = tm ? tm[1].trim() : '';
+        r.reddit_body = rd.replace(/^Title:.*$/m, '').trim();
+      } else {
+        r.reddit_title = '';
+        r.reddit_body = '';
+      }
+
+      return r;
+    }
+
+    let parsedData = null;
+
+    function handlePaste() {
+      const text = document.getElementById('pasteArea').value;
+      if (!text.trim()) {
+        document.getElementById('previewSection').style.display = 'none';
+        return;
+      }
+      parsedData = mapSections(parseOutput(text));
+      renderPreview(parsedData);
+      document.getElementById('previewSection').style.display = 'block';
+    }
+
+    function renderPreview(d) {
+      const platforms = [
+        { label: 'Substack Notes', content: d.substack_notes },
+        { label: 'X.com', content: d.x_tweet + (d.x_reply_link ? '\n\n(Reply link: ' + d.x_reply_link + ')' : '') },
+        { label: 'Instagram', content: d.instagram_caption + (d.instagram_hashtags ? '\n\n' + d.instagram_hashtags : '') },
+        { label: 'Threads', content: d.threads },
+        { label: 'Facebook page', content: d.facebook },
+        { label: 'Reddit (personal)', content: (d.reddit_title ? 'Title: ' + d.reddit_title + '\n\n' : '') + d.reddit_body }
+      ];
+
+      document.getElementById('platformList').innerHTML = platforms.map((p, i) => `
+        <div class="platform-item">
+          <div class="platform-hdr" onclick="toggle(${i})">
+            <span class="platform-name">${p.label}</span>
+            <span class="platform-status ${p.content.trim() ? '' : 'empty'}">${p.content.trim() ? 'parsed' : 'empty'}</span>
+          </div>
+          <div class="platform-body" id="pb-${i}">${esc(p.content)}</div>
+        </div>
+      `).join('');
+    }
+
+    function toggle(i) {
+      document.getElementById('pb-' + i).classList.toggle('open');
+    }
+
+    function esc(s) {
+      return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    async function sendToMake() {
+      const url = document.getElementById('webhookUrl').value.trim();
+      const st = document.getElementById('statusMsg');
+      const btn = document.getElementById('sendBtn');
+
+      if (!url) { st.textContent = 'Enter your Make webhook URL first.'; st.className = 'status-msg err'; return; }
+      if (!parsedData) { st.textContent = 'Paste Claude output first.'; st.className = 'status-msg err'; return; }
+
+      btn.disabled = true;
+      st.textContent = 'Sending...';
+      st.className = 'status-msg';
+
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(parsedData)
+        });
+        if (res.ok) {
+          st.textContent = 'Sent. Make is running.';
+          st.className = 'status-msg ok';
+        } else {
+          st.textContent = 'Error ' + res.status + '. Check the webhook URL.';
+          st.className = 'status-msg err';
+        }
+      } catch(e) {
+        st.textContent = 'Could not reach Make. Check URL or connection.';
+        st.className = 'status-msg err';
+      }
+
+      btn.disabled = false;
+    }
+  </script>
+</body>
+</html>
