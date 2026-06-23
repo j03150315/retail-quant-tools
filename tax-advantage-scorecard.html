@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Retire Sooner Than You Think — Interactive Tax Advantage Scorecard</title>
+<meta name="description" content="12 tax advantages that shrink your FIRE number. 2026 numbers, interactive scorecard by Retail Quant." />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { margin: 0; background: #fff; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState } = React;
+
+// ====== UTILITIES ======
+const fmt = (n) => Math.round(n).toLocaleString("en-US");
+const D = (n) => "$" + fmt(n);
+
+// ====== 2026 TAX PARAMETERS ======
+const TAX = {
+  single: {
+    stdDed: 16100, brackets: [[12400, 0.10], [50400, 0.12], [105700, 0.22]],
+    ltcg0: 49450, niit: 200000, acaCliff: 60240, irmaa: 106000,
+    seniorDed: 2050, obbba: 6000, obPhase: 75000,
+    ssThresh: [25000, 34000], label: "Single", acaHH: "1 person",
+  },
+  mfj: {
+    stdDed: 32200, brackets: [[24800, 0.10], [100800, 0.12], [211400, 0.22]],
+    ltcg0: 98900, niit: 250000, acaCliff: 81760, irmaa: 212000,
+    seniorDed: 3300, obbba: 12000, obPhase: 150000,
+    ssThresh: [32000, 44000], label: "Married Filing Jointly", acaHH: "2 people",
+  },
+};
+const INC = {
+  single: { w2: 65000, sw2: 15000, ltcg: 20000, qd: 5000, roth: 25000 },
+  mfj: { w2: 120000, sw2: 20000, ltcg: 40000, qd: 10000, roth: 50000 },
+};
+const ACA_EST = { single: 7200, mfj: 14400 };
+const SS_EST = { single: 4500, mfj: 8500 };
+
+// ====== TAX MATH ======
+function ordTax(brackets, taxable) {
+  let tax = 0, prev = 0;
+  for (const [ceil, rate] of brackets) {
+    if (taxable <= prev) break;
+    tax += (Math.min(taxable, ceil) - prev) * rate;
+    prev = ceil;
+  }
+  return Math.round(tax);
+}
+
+function calc(f) {
+  const t = TAX[f], i = INC[f];
+  const w2Taxable = i.w2 - t.stdDed;
+  const w2Tax = ordTax(t.brackets, w2Taxable);
+  const w2FICA = Math.round(i.w2 * 0.0765);
+  const semiAGI = i.sw2 + i.ltcg + i.qd;
+  const exDed = Math.max(t.stdDed - i.sw2, 0);
+  const semiOrd = Math.max(i.sw2 - t.stdDed, 0);
+  const semiInv = Math.max(i.ltcg + i.qd - exDed, 0);
+  const semiLTCGTax = semiOrd + semiInv > t.ltcg0 ? Math.round((semiOrd + semiInv - t.ltcg0) * 0.15) : 0;
+  const semiOrdTax = ordTax(t.brackets, semiOrd);
+  const semiFICA = Math.round(i.sw2 * 0.0765);
+  const w2Total = w2Tax + w2FICA;
+  const semiTotal = semiOrdTax + semiLTCGTax + semiFICA;
+  const ltcg0RoomW2 = Math.max(t.ltcg0 - w2Taxable, 0);
+  const ltcgTaxW2 = Math.round(Math.max(i.ltcg - ltcg0RoomW2, 0) * 0.15);
+  const qdRoomW2 = Math.max(ltcg0RoomW2 - i.ltcg, 0);
+  const qdTaxW2 = Math.round(Math.max(i.qd - qdRoomW2, 0) * 0.15);
+  const ltcg0Rem = t.ltcg0 - semiOrd - semiInv;
+  const convRoomW2 = Math.max(t.brackets[1][0] - w2Taxable, 0);
+  const delta = w2Total - semiTotal;
+  const tripleStack = t.stdDed + t.seniorDed + t.obbba;
+  return {
+    w2Tax, w2FICA, w2Total, w2Taxable,
+    semiOrdTax, semiLTCGTax, semiFICA, semiTotal, semiAGI, semiOrd, semiInv, exDed,
+    delta, portfolio: Math.round(delta / 0.04),
+    ltcg0RoomW2, ltcgTaxW2, qdTaxW2, ltcg0Rem,
+    convRoomW2, convRoomSemi: ltcg0Rem,
+    ficaDelta: w2FICA - semiFICA,
+    acaDelta: ACA_EST[f], ssDelta: SS_EST[f],
+    totalAnnual: delta + ACA_EST[f],
+    totalPortfolio: Math.round((delta + ACA_EST[f]) / 0.04),
+    obbbaW2Save: Math.round(t.obbba * 0.12),
+    seniorW2Save: Math.round(t.seniorDed * 0.12),
+    tripleStack,
+  };
+}
+const C = { single: calc("single"), mfj: calc("mfj") };
+
+// ====== CARD DATA ======
+function cards(f) {
+  const c = C[f], t = TAX[f], i = INC[f];
+  return [
+    {
+      id: 1, name: "Standard Deduction Shelter", sec: 1,
+      line: "With low earned income, your standard deduction covers nearly all your wages — clearing the decks for 0% investment income rates.",
+      age: "day1", fire: "shrinks", cliff: false, temp: false, qual: false,
+      w2: { val: D(c.w2Taxable), lbl: "taxable ordinary income" },
+      semi: { val: "$0", lbl: "taxable ordinary income" },
+      delta: { val: D(c.w2Tax), lbl: "income tax eliminated", n: c.w2Tax },
+      room: D(c.exDed) + " of deduction left over to shelter investment income",
+      math: "Full W-2: " + D(i.w2) + " − " + D(t.stdDed) + " deduction = " + D(c.w2Taxable) + " taxable → " + D(c.w2Tax) + " income tax.\n\nSemi-retired: " + D(i.sw2) + " W-2 − " + D(t.stdDed) + " deduction = −" + D(c.exDed) + " excess. The surplus shelters " + D(c.exDed) + " of investment income. Taxable ordinary income: $0.\n\nEvery additional dollar of ordinary income (W-2, 1099, short-term gains) shrinks this room. Roth withdrawals don’t affect it.",
+      ref: null,
+    },
+    {
+      id: 2, name: "0% Long-Term Capital Gains Bracket", sec: 1,
+      line: "With your salary out of the way, long-term capital gains stack into the 0% bracket — up to " + D(t.ltcg0) + " of taxable income pays zero.",
+      age: "day1", fire: "shrinks", cliff: false, temp: false, qual: false,
+      w2: { val: D(c.ltcg0RoomW2), lbl: "of 0% room left (salary fills brackets)" },
+      semi: { val: "$0 tax", lbl: "on " + D(i.ltcg) + " of capital gains" },
+      delta: { val: D(c.ltcgTaxW2), lbl: "LTCG tax avoided", n: c.ltcgTaxW2 },
+      room: D(c.ltcg0Rem) + " of 0% bracket room remaining after LTCG + qualified dividends",
+      math: "0% LTCG ceiling: " + D(t.ltcg0) + " of taxable income.\n\nFull W-2: Salary fills " + D(c.w2Taxable) + " of taxable space. Only " + D(c.ltcg0RoomW2) + " of 0% room remains. " + D(i.ltcg) + " of LTCG would cost " + D(c.ltcgTaxW2) + " at 15%.\n\nSemi-retired: Ordinary taxable = $0. Full " + D(t.ltcg0) + " of 0% room available. " + D(i.ltcg) + " LTCG + " + D(i.qd) + " QD = " + D(c.semiInv) + " used. Room remaining: " + D(c.ltcg0Rem) + ".",
+      ref: null,
+    },
+    {
+      id: 3, name: "Qualified Dividends at 0%", sec: 1,
+      line: "Most U.S. stock dividends held 60+ days share the same preferential 0% rate as long-term gains — free income when brackets are clear.",
+      age: "day1", fire: "shrinks", cliff: false, temp: false, qual: false,
+      w2: { val: D(c.qdTaxW2), lbl: "tax on " + D(i.qd) + " dividends at 15%" },
+      semi: { val: "$0 tax", lbl: "on " + D(i.qd) + " qualified dividends" },
+      delta: { val: D(c.qdTaxW2), lbl: "dividend tax avoided", n: c.qdTaxW2 },
+      room: "Shares the same bracket space as LTCG (Card 2). Room remaining: " + D(c.ltcg0Rem),
+      math: "Qualified dividends use the same 0%/15%/20% rate table as LTCG. They don’t get a separate 0% zone — they stack together.\n\nFull W-2: " + D(i.qd) + " QD pushed into 15% tier → " + D(c.qdTaxW2) + " tax.\nSemi-retired: " + D(i.qd) + " QD fits within 0% ceiling → $0 tax.\n\nCombined LTCG + QD room remaining: " + D(c.ltcg0Rem) + ".",
+      ref: { label: "JEPI Tax Drag Analysis", url: "#" },
+    },
+    {
+      id: 4, name: "No FICA / Payroll Tax", sec: 1,
+      line: "Investment income and Roth withdrawals don’t trigger the 7.65% payroll tax. Only your small part-time W-2 pays FICA.",
+      age: "day1", fire: "shrinks", cliff: false, temp: false, qual: false,
+      w2: { val: D(c.w2FICA), lbl: "FICA on " + D(i.w2) + " salary" },
+      semi: { val: D(c.semiFICA), lbl: "FICA on " + D(i.sw2) + " part-time only" },
+      delta: { val: D(c.ficaDelta), lbl: "FICA eliminated", n: c.ficaDelta },
+      room: null,
+      math: "FICA = 7.65% (6.2% Social Security + 1.45% Medicare) on every W-2 dollar.\n\nFull W-2: 7.65% × " + D(i.w2) + " = " + D(c.w2FICA) + "\nSemi-retired: 7.65% × " + D(i.sw2) + " = " + D(c.semiFICA) + "\nDelta: " + D(c.ficaDelta) + "\n\nLTCG, qualified dividends, and Roth withdrawals pay $0 FICA.\n\n⚠️ If you’re considering freelance/1099 instead of part-time W-2, self-employment tax is 15.3% — double the employee FICA rate.",
+      ref: null,
+    },
+    {
+      id: 5, name: "No Net Investment Income Tax", sec: 1,
+      line: "The 3.8% NIIT surtax only triggers above " + D(t.niit) + " MAGI. Semi-retirement income stays well below — one more reason to keep MAGI controlled.",
+      age: "day1", fire: "shrinks", cliff: false, temp: false, qual: true,
+      w2: { val: D(i.w2), lbl: "MAGI (below " + D(t.niit) + " threshold)" },
+      semi: { val: D(c.semiAGI), lbl: "MAGI (well below " + D(t.niit) + ")" },
+      delta: { val: "$0", lbl: "both below threshold at these incomes", n: 0 },
+      room: null,
+      math: "NIIT: 3.8% surtax on investment income when MAGI exceeds " + D(t.niit) + ". This threshold is NOT inflation-indexed — it hasn’t changed since 2013.\n\nAt these teaching income levels, neither persona triggers NIIT. But for higher-income semi-retirees, keeping MAGI below " + D(t.niit) + " avoids 3.8% on every dollar of investment income.\n\nRoth withdrawals don’t count toward MAGI, making them your tool for spending above the threshold without triggering NIIT.",
+      ref: null,
+    },
+    {
+      id: 6, name: "Roth Conversion Ladder", sec: 1,
+      line: "Without a salary filling your brackets, you can convert traditional IRA/401(k) money to Roth at 10–12% — setting up tax-free income for life.",
+      age: "day1", fire: "compounds", cliff: false, temp: false, qual: false,
+      w2: { val: D(c.convRoomW2), lbl: "of conversion room at ≤12%" },
+      semi: { val: D(c.convRoomSemi), lbl: "of conversion room preserving 0% LTCG" },
+      delta: { val: D(c.convRoomSemi - c.convRoomW2), lbl: "more conversion room", n: 0 },
+      room: "At " + D(c.convRoomSemi) + " of conversions, average tax rate ≈ 11%. Every dollar converted comes out tax-free later.",
+      math: "Conversion room = space in low brackets after your other income.\n\nFull W-2: Taxable ordinary = " + D(c.w2Taxable) + ". Top of 12% bracket = " + D(t.brackets[1][0]) + ". Room at 12%: " + D(c.convRoomW2) + ".\n\nSemi-retired: Ordinary taxable = $0. To keep LTCG at 0%, total taxable must stay under " + D(t.ltcg0) + ". With " + D(c.semiInv) + " already used by investments, room = " + D(c.convRoomSemi) + ".\n\nAt " + D(c.convRoomSemi) + " of conversions:\n• 10% on first " + D(t.brackets[0][0]) + " = " + D(t.brackets[0][0] * 0.10) + "\n• 12% on the rest\n• Average rate ≈ 11%\n\n5-year seasoning rule: Converted amounts can’t be withdrawn penalty-free for 5 years (before age 59½). Plan your conversion ladder early.\n\nEvery dollar you convert now comes out tax-free later — and it won’t count toward ACA, IRMAA, or Social Security means tests. This is the single most important move in the pre-65 years.",
+      ref: { label: "Roth Conversion Guide", url: "#" },
+    },
+    {
+      id: 7, name: "Roth Withdrawal Invisibility", sec: 1,
+      line: "Qualified Roth withdrawals are excluded from AGI, ACA MAGI, IRMAA MAGI, Social Security combined income, and every means test in the tax code.",
+      age: "day1", fire: "compounds", cliff: false, temp: false, qual: true, hasFlowMap: true,
+      w2: { val: "$0", lbl: "Roth withdrawals in this scenario" },
+      semi: { val: D(i.roth), lbl: "of invisible spending" },
+      delta: { val: "Structural", lbl: D(i.roth) + " doesn’t appear in any means test", n: 0 },
+      room: null,
+      math: "Qualified Roth withdrawals (account open 5+ years, age 59½+) are excluded from:\n• Adjusted Gross Income (AGI)\n• ACA Modified AGI → won’t push you over the subsidy cliff\n• IRMAA Modified AGI → won’t trigger Medicare surcharges\n• Social Security “combined income” → won’t make benefits taxable\n• NIIT threshold → won’t trigger the 3.8% surtax\n• OBBBA phaseout MAGI → won’t reduce your senior deduction\n\nThis is why the semi-retired persona’s income blend leans heavily on Roth withdrawals (" + D(i.roth) + "). Every dollar from Roth is a dollar that doesn’t threaten any other advantage on this scorecard.",
+      ref: null,
+    },
+    {
+      id: 8, name: "ACA Premium Tax Credits", sec: 2,
+      line: "Keep your MAGI below the cliff and the government subsidizes your health insurance. One dollar over, and the entire subsidy vanishes.",
+      age: "pre65", fire: "protects", cliff: true,
+      cliffNote: "Exceeding " + D(t.acaCliff) + " (" + t.acaHH + ") eliminates the ENTIRE subsidy — not a gradual phaseout.",
+      temp: false, qual: false,
+      w2: { val: "$0 subsidy", lbl: "MAGI " + D(i.w2) + " exceeds " + D(t.acaCliff) + " cliff" },
+      semi: { val: "~" + D(c.acaDelta) + "/yr", lbl: "MAGI " + D(c.semiAGI) + " is below " + D(t.acaCliff) },
+      delta: { val: "~" + D(c.acaDelta) + "/yr", lbl: "estimated annual subsidy preserved", n: c.acaDelta },
+      room: null,
+      math: "ACA MAGI = AGI (W-2 + LTCG + dividends). Roth withdrawals DON’T count.\n\nFull W-2: MAGI = " + D(i.w2) + " → above " + D(t.acaCliff) + " (400% FPL for " + t.acaHH + "). Falls off cliff. $0 subsidy.\n\nSemi-retired: MAGI = " + D(c.semiAGI) + " → below cliff. Qualifies for estimated ~" + D(c.acaDelta) + "/year in premium tax credits.\n\nSubsidy value varies significantly by age and location. Older enrollees in high-premium areas can see $15,000–$25,000/year.\n\nThe cliff is BACK in 2026 — the enhanced subsidies expired at the end of 2025. One dollar over 400% FPL eliminates everything.\n\nWindow framing: If you retire at 50, this is a 15-year window worth ~" + D(c.acaDelta * 15) + " in subsidies. At 60, it’s a 5-year window worth ~" + D(c.acaDelta * 5) + ". Either way — plan for it.\n\nRoth withdrawals are your primary tool for spending without triggering the ACA cliff.",
+      ref: { label: "ACA & Roth Conversion Tension", url: "#" },
+    },
+    {
+      id: 9, name: "Social Security Tax Elimination", sec: 2,
+      line: "With low AGI from semi-retirement (especially after years of Roth conversions), you can keep up to 100% of Social Security benefits tax-free.",
+      age: "pre65", fire: "protects", cliff: false, temp: false, qual: false,
+      w2: { val: "85% taxable", lbl: "combined income far above " + D(t.ssThresh[1]) },
+      semi: { val: "0–50% taxable", lbl: "low AGI + Roth keeps combined income near " + D(t.ssThresh[0]) },
+      delta: { val: "~" + D(c.ssDelta) + "/yr", lbl: "estimated SS tax avoided at claiming age", n: c.ssDelta },
+      room: null,
+      math: "Social Security taxation uses “combined income” = AGI + nontaxable interest + ½ of SS benefits.\n\nThresholds (" + t.label + "):\n• Below " + D(t.ssThresh[0]) + ": 0% of benefits taxable\n• " + D(t.ssThresh[0]) + "–" + D(t.ssThresh[1]) + ": up to 50% taxable\n• Above " + D(t.ssThresh[1]) + ": up to 85% taxable\n\nFull W-2 at claiming age: AGI " + D(i.w2) + " + ½ SS → well above " + D(t.ssThresh[1]) + " → 85% of benefits taxable → estimated ~" + D(c.ssDelta) + "/year in taxes on benefits.\n\nSemi-retired (post-Roth conversions): AGI could be just " + D(i.sw2) + " or less. Combined income near or below " + D(t.ssThresh[0]) + " → 0% of benefits taxable.\n\nThis advantage becomes relevant at claiming age (62–70). The planning starts now — Roth conversions in your 40s and 50s mean you arrive at claiming age with a Roth pool that doesn’t count toward combined income.",
+      ref: null,
+    },
+    {
+      id: 10, name: "IRMAA Avoidance", sec: 3,
+      line: "Medicare premiums jump at MAGI thresholds using your income from 2 years prior. If you’ve been doing Roth conversions since Day 1, your MAGI at 63 is naturally low.",
+      age: "63plus", fire: "protects", cliff: true,
+      cliffNote: "Tiered cliffs — each threshold crossing adds $1,000+/year per person. First tier at " + D(t.irmaa) + ".",
+      temp: false, qual: false,
+      w2: { val: D(i.w2), lbl: "MAGI (below " + D(t.irmaa) + " base tier)" },
+      semi: { val: D(c.semiAGI), lbl: "MAGI (well below " + D(t.irmaa) + ")" },
+      delta: { val: "Standard premium", lbl: "both below first tier at these incomes", n: 0 },
+      room: null,
+      math: "IRMAA (Income-Related Monthly Adjustment Amount) adds surcharges to Medicare Part B and Part D premiums at MAGI thresholds.\n\nMedicare uses income from 2 years prior — your income at age 63 determines premiums at 65.\n\nFirst tier: MAGI above " + D(t.irmaa) + " → ~$890/year surcharge per person.\nHigher tiers add $1,000+ more at each crossing. These are cliff-based, not gradual.\n\nAt these teaching income levels, both personas are below the first tier. But for higher-income retirees, controlling MAGI through Roth withdrawals is critical.\n\nIf you retired at 50 and have been doing Roth conversions for 13 years, your MAGI at 63 is naturally low — IRMAA avoidance happens automatically.",
+      ref: { label: "IRMAA: The Medicare Tax Trap", url: "#" },
+    },
+    {
+      id: 11, name: "OBBBA Senior Bonus Deduction", sec: 3,
+      line: "Brand new: an extra " + D(t.obbba) + " deduction for those 65+ that stacks on top of your standard deduction. Phases out at " + D(t.obPhase) + " MAGI.",
+      age: "65plus", fire: "shrinks", cliff: false,
+      temp: true, tempNote: "Tax years 2025–2028 only. If you’re turning 65 in this window, don’t miss it.",
+      qual: false,
+      w2: { val: D(c.obbbaW2Save), lbl: "tax saved (" + D(t.obbba) + " × 12%)" },
+      semi: { val: D(t.obbba), lbl: "of additional 0% room / conversion room" },
+      delta: { val: D(c.obbbaW2Save), lbl: "tax saved for W-2 earner", n: c.obbbaW2Save },
+      room: "Semi-retired at 65+: already at $0 tax, so OBBBA expands room for Roth conversions by " + D(t.obbba) + ".",
+      math: "OBBBA Senior Bonus Deduction: " + D(t.obbba) + " for " + t.label + " filers age 65+.\n\nPhaseout: " + D(t.obPhase) + " MAGI. Both personas are below this.\n\nFull W-2: Saves " + D(c.obbbaW2Save) + " (at 12% marginal rate).\n\nSemi-retired: Already paying $0 income tax, so no additional tax savings. But the deduction expands the “room” — allowing " + D(t.obbba) + " more in Roth conversions or other income before hitting taxable territory.\n\nThe “triple stack” at 65+:\n• Standard deduction: " + D(t.stdDed) + "\n• Additional senior deduction: " + D(t.seniorDed) + "\n• OBBBA bonus: " + D(t.obbba) + "\n• Total shelter: " + D(c.tripleStack) + "\n\nThis means " + D(c.tripleStack) + " of income is fully sheltered before any tax applies.",
+      ref: null,
+    },
+    {
+      id: 12, name: "Additional Senior Standard Deduction", sec: 3,
+      line: "A permanent extra " + D(t.seniorDed) + " deduction at 65+ that further deepens your tax shelter. Modest alone, powerful in the stack.",
+      age: "65plus", fire: "shrinks", cliff: false, temp: false, qual: false,
+      w2: { val: D(c.seniorW2Save), lbl: "tax saved (" + D(t.seniorDed) + " × 12%)" },
+      semi: { val: D(t.seniorDed), lbl: "of additional 0% room" },
+      delta: { val: D(c.seniorW2Save), lbl: "tax saved for W-2 earner", n: c.seniorW2Save },
+      room: "Combined with OBBBA and standard deduction, total shelter at 65+: " + D(c.tripleStack),
+      math: "Additional standard deduction for age 65+: " + D(t.seniorDed) + " (" + (f === "single" ? "$2,050 single" : "$1,650 per spouse × 2") + ").\n\nThis is permanent (unlike OBBBA) and stacks with both the standard deduction and OBBBA.\n\nFull W-2: Saves " + D(c.seniorW2Save) + " at 12% marginal rate.\n\nSemi-retired: Expands the already-generous tax shelter. At 65+, the combined shelter of " + D(c.tripleStack) + " means even more room for Roth conversions at 0% or low rates.\n\nThese advantages reward the early retiree who planned ahead. If you spent your 40s and 50s doing Roth conversions in low brackets (Card 6), you arrive at 65 with a large Roth pool, a low MAGI, and every advantage in this section activates without effort.",
+      ref: null,
+    },
+  ];
+}
+
+// ====== SECTION META ======
+const SECTIONS = [
+  { id: 1, title: "The Day You Quit", sub: "7 advantages activate immediately — no age requirement", phase: "day1", color: "emerald", cardIds: [1,2,3,4,5,6,7] },
+  { id: 2, title: "Your Pre-65 Window", sub: "2 time-limited advantages between quitting and Medicare", phase: "pre65", color: "amber", cardIds: [8,9] },
+  { id: 3, title: "Unlocks at 63–65+", sub: "3 more advantages — and if you’ve done Roth conversions, they activate automatically", phase: "65plus", color: "blue", cardIds: [10,11,12] },
+];
+
+// ====== INCOME TYPE CHEAT SHEET DATA ======
+const CHEAT = [
+  { type: "Part-time W-2", bracket: "Yes, from the bottom", fica: "Yes, 7.65%", aca: "Yes", irmaa: "Yes", ss: "Yes", highlight: null },
+  { type: "Freelance / 1099", bracket: "Yes, from the bottom", fica: "Yes, 15.3%", aca: "Yes", irmaa: "Yes", ss: "Yes", highlight: "warn" },
+  { type: "Short-term cap gains", bracket: "Yes, as ordinary", fica: "No", aca: "Yes", irmaa: "Yes", ss: "Yes", highlight: null },
+  { type: "Long-term cap gains", bracket: "Preferential 0/15/20%", fica: "No", aca: "Yes", irmaa: "Yes", ss: "Yes", highlight: null },
+  { type: "Qualified dividends", bracket: "Same as LTCG", fica: "No", aca: "Yes", irmaa: "Yes", ss: "Yes", highlight: null },
+  { type: "Rental income (net)", bracket: "Yes, as ordinary", fica: "No*", aca: "Yes", irmaa: "Yes", ss: "Yes", highlight: null },
+  { type: "Roth withdrawals", bracket: "No", fica: "No", aca: "No", irmaa: "No", ss: "No", highlight: "good" },
+  { type: "HSA withdrawals", bracket: "No", fica: "No", aca: "No", irmaa: "No", ss: "No", highlight: "good" },
+];
+
+// ====== SMALL COMPONENTS ======
+const ageMeta = { day1: { emoji: "🟢", label: "Day 1", bg: "bg-emerald-100", text: "text-emerald-700" }, pre65: { emoji: "🟡", label: "Pre-65", bg: "bg-amber-100", text: "text-amber-700" }, "63plus": { emoji: "🟠", label: "63+", bg: "bg-blue-100", text: "text-blue-700" }, "65plus": { emoji: "🟠", label: "65+", bg: "bg-blue-100", text: "text-blue-700" } };
+const fireMeta = { shrinks: { emoji: "🔻", label: "Shrinks your number", bg: "bg-emerald-50", text: "text-emerald-600" }, protects: { emoji: "🛡️", label: "Protects a benefit", bg: "bg-amber-50", text: "text-amber-600" }, compounds: { emoji: "🔄", label: "Compounds over time", bg: "bg-blue-50", text: "text-blue-600" } };
+
+function Badge({ type, data }) {
+  const m = data;
+  return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${m.bg} ${m.text}`}>{m.emoji} {m.label}</span>;
+}
+
+// ====== MAGI FLOW MAP ======
+function MagiFlowMap() {
+  const incomes = [
+    { name: "W-2 Income", connects: true },
+    { name: "LTCG", connects: true },
+    { name: "Qual. Dividends", connects: true },
+    { name: "1099 / Freelance", connects: true },
+    { name: "Rental Income", connects: true },
+    { name: "Roth Withdrawals", connects: false },
+    { name: "HSA Withdrawals", connects: false },
+  ];
+  const tests = ["ACA MAGI", "IRMAA MAGI", "SS Combined Income", "NIIT Threshold"];
+  return (
+    <div className="my-4">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">MAGI Flow Map — Which income types trigger which means tests?</p>
+      <div className="grid grid-cols-2 gap-4 sm:gap-8">
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold text-slate-400 mb-1">INCOME TYPES</p>
+          {incomes.map((inc) => (
+            <div key={inc.name} className={`px-3 py-1.5 rounded text-xs font-medium border ${inc.connects ? "bg-slate-50 border-slate-200 text-slate-600" : "bg-emerald-50 border-emerald-300 text-emerald-700 font-bold"}`}>
+              {inc.connects ? "" : "✓ "}{inc.name}
+              {!inc.connects && <span className="ml-1 text-emerald-500">→ invisible</span>}
+            </div>
+          ))}
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold text-slate-400 mb-1">MEANS TESTS</p>
+          {tests.map((t) => (
+            <div key={t} className="px-3 py-1.5 rounded text-xs font-medium bg-amber-50 border border-amber-200 text-amber-700">{t}</div>
+          ))}
+          <div className="mt-3 p-2 rounded bg-emerald-50 border border-emerald-200">
+            <p className="text-xs text-emerald-700 font-medium">Roth & HSA connect to <span className="font-bold">nothing</span>. They're invisible to every means test.</p>
+          </div>
+        </div>
+      </div>
+      <div className="hidden sm:block mt-2">
+        <p className="text-xs text-slate-400 italic">Each gray income type feeds into all four means tests on the right. The green types bypass everything.</p>
+      </div>
+    </div>
+  );
+}
+
+// ====== CARD COMPONENT ======
+function Card({ card, isOpen, onToggle }) {
+  const isQual = card.qual || card.delta.val === "Structural";
+  return (
+    <div className={`border rounded-lg mb-3 overflow-hidden transition-all ${card.age === "63plus" || card.age === "65plus" ? "border-blue-200" : card.age === "pre65" ? "border-amber-200" : "border-slate-200"}`}>
+      <button onClick={onToggle} className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors">
+        <div className="flex flex-wrap items-center gap-2 mb-1">
+          <span className="text-sm font-bold text-slate-700">#{card.id}</span>
+          <span className="text-sm font-semibold text-slate-800 flex-1 min-w-0">{card.name}</span>
+          <Badge type="age" data={ageMeta[card.age]} />
+          <Badge type="fire" data={fireMeta[card.fire]} />
+          {card.cliff && <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">⚠️ Cliff</span>}
+          {card.temp && <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium">⏳ Temporary</span>}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+          <div className="bg-slate-50 rounded px-3 py-2">
+            <p className="text-xs text-slate-400 font-medium">👔 Full W-2</p>
+            <p className="text-sm font-semibold text-slate-600">{card.w2.val}</p>
+            <p className="text-xs text-slate-400">{card.w2.lbl}</p>
+          </div>
+          <div className="bg-emerald-50 rounded px-3 py-2">
+            <p className="text-xs text-emerald-500 font-medium">🌱 Semi-Retired</p>
+            <p className="text-sm font-semibold text-emerald-700">{card.semi.val}</p>
+            <p className="text-xs text-emerald-500">{card.semi.lbl}</p>
+          </div>
+          <div className={`rounded px-3 py-2 flex flex-col justify-center ${isQual ? "bg-blue-50" : "bg-emerald-100"}`}>
+            <p className="text-xs text-slate-500 font-medium">Delta</p>
+            <p className={`text-lg font-bold ${isQual ? "text-blue-600" : "text-emerald-600"}`}>{card.delta.val}</p>
+            <p className="text-xs text-slate-500">{card.delta.lbl}</p>
+          </div>
+        </div>
+      </button>
+      <div className="px-4 pb-2">
+        <p className="text-sm text-slate-500 italic">{card.line}</p>
+      </div>
+      {isOpen && (
+        <div className="border-t border-slate-100 px-4 py-3 bg-slate-50 space-y-3">
+          {card.cliff && card.cliffNote && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+              <span className="font-bold">⚠️ Hard cliff: </span>{card.cliffNote}
+            </div>
+          )}
+          {card.temp && card.tempNote && (
+            <div className="p-3 bg-orange-50 border border-orange-200 rounded text-sm text-orange-700">
+              <span className="font-bold">⏳ Expiration: </span>{card.tempNote}
+            </div>
+          )}
+          {card.room && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded text-sm text-emerald-700">
+              <span className="font-bold">Room remaining: </span>{card.room}
+            </div>
+          )}
+          {card.hasFlowMap && <MagiFlowMap />}
+          <div className="text-sm text-slate-600 whitespace-pre-line leading-relaxed">{card.math}</div>
+          {card.ref && (
+            <div className="pt-2 border-t border-slate-200">
+              <p className="text-xs text-slate-400">Deep dive: <a href={card.ref.url} className="text-emerald-600 underline hover:text-emerald-700">{card.ref.label}</a> → Retail Quant</p>
+            </div>
+          )}
+        </div>
+      )}
+      <div className="px-4 py-1.5 text-center">
+        <button onClick={onToggle} className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
+          {isOpen ? "▲ Collapse" : "▼ Show math & details"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ====== INCOME TYPE CHEAT SHEET ======
+function CheatSheet() {
+  const cols = ["Fills tax brackets?", "Triggers FICA?", "ACA MAGI?", "IRMAA MAGI?", "SS taxation?"];
+  return (
+    <div className="mb-8">
+      <h3 className="text-lg font-bold text-slate-800 mb-1">Income Type Cheat Sheet</h3>
+      <p className="text-sm text-slate-500 mb-3">Not all income is created equal. The same $20,000 hits your tax situation completely differently depending on where it comes from.</p>
+      <div className="overflow-x-auto -mx-4 px-4">
+        <table className="w-full text-xs border-collapse min-w-[600px]">
+          <thead>
+            <tr className="border-b-2 border-slate-200">
+              <th className="text-left py-2 pr-3 text-slate-600 font-semibold">Income Type</th>
+              {cols.map((c) => <th key={c} className="text-center py-2 px-2 text-slate-600 font-semibold">{c}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {CHEAT.map((row) => (
+              <tr key={row.type} className={`border-b border-slate-100 ${row.highlight === "good" ? "bg-emerald-50 font-semibold" : row.highlight === "warn" ? "bg-red-50" : ""}`}>
+                <td className={`py-2 pr-3 font-medium ${row.highlight === "good" ? "text-emerald-700" : row.highlight === "warn" ? "text-red-700" : "text-slate-700"}`}>{row.type}</td>
+                <td className="text-center py-2 px-2 text-slate-600">{row.bracket}</td>
+                <td className={`text-center py-2 px-2 ${row.fica.includes("15.3") ? "text-red-600 font-bold" : row.fica === "No" ? "text-emerald-600" : "text-slate-600"}`}>{row.fica}</td>
+                <td className={`text-center py-2 px-2 ${row.aca === "No" ? "text-emerald-600 font-bold" : "text-slate-600"}`}>{row.aca}</td>
+                <td className={`text-center py-2 px-2 ${row.irmaa === "No" ? "text-emerald-600 font-bold" : "text-slate-600"}`}>{row.irmaa}</td>
+                <td className={`text-center py-2 px-2 ${row.ss === "No" ? "text-emerald-600 font-bold" : "text-slate-600"}`}>{row.ss}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ====== COLOR MAP (Tailwind needs full class strings) ======
+const CLR = {
+  emerald: { border2: "border-emerald-200", bg: "bg-emerald-50", text7: "text-emerald-700", text6: "text-emerald-600", border4: "border-emerald-400" },
+  amber: { border2: "border-amber-200", bg: "bg-amber-50", text7: "text-amber-700", text6: "text-amber-600", border4: "border-amber-400" },
+  blue: { border2: "border-blue-200", bg: "bg-blue-50", text7: "text-blue-700", text6: "text-blue-600", border4: "border-blue-400" },
+};
+
+// ====== RETIREMENT ROADMAP ======
+function Roadmap() {
+  const phases = [
+    { emoji: "🟢", label: "Day 1: You quit", count: 7, color: "emerald", desc: "advantages activate" },
+    { emoji: "🟡", label: "Pre-65 window", count: 2, color: "amber", desc: "time-limited advantages" },
+    { emoji: "🟠", label: "Age 63–65+", count: 3, color: "blue", desc: "more unlock" },
+  ];
+  return (
+    <div className="mb-8">
+      <h3 className="text-lg font-bold text-slate-800 mb-3">Retirement Roadmap</h3>
+      <div className="flex flex-col sm:flex-row gap-3">
+        {phases.map((p, i) => {
+          const cl = CLR[p.color];
+          return (
+            <div key={p.label} className="flex-1 relative">
+              <div className={`rounded-lg border-2 ${cl.border2} ${cl.bg} p-4 text-center`}>
+                <p className="text-2xl mb-1">{p.emoji}</p>
+                <p className={`text-sm font-bold ${cl.text7}`}>{p.label}</p>
+                <p className={`text-2xl font-black ${cl.text6} my-1`}>{p.count}</p>
+                <p className={`text-xs ${cl.text6}`}>{p.desc}</p>
+              </div>
+              {i < 2 && <div className="hidden sm:block absolute top-1/2 -right-2 text-slate-300 text-lg">→</div>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ====== PERSONA LEGEND ======
+function Legend({ filing }) {
+  const i = INC[filing];
+  const t = TAX[filing];
+  const rows = [
+    { label: "Part-time W-2", val: D(i.sw2) },
+    { label: "Long-term capital gains", val: D(i.ltcg) },
+    { label: "Qualified dividends", val: D(i.qd) },
+    { label: "Roth withdrawals", val: D(i.roth) },
+  ];
+  return (
+    <div className="mb-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="rounded-lg bg-slate-50 border border-slate-200 p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xl">👔</span>
+          <div>
+            <p className="text-sm font-bold text-slate-700">Full Salary</p>
+            <p className="text-xs text-slate-500">{D(i.w2)} W-2 income</p>
+          </div>
+        </div>
+        <p className="text-xs text-slate-400">Your present: all income from one paycheck, taxed at ordinary rates + FICA on every dollar.</p>
+      </div>
+      <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xl">🌱</span>
+          <div>
+            <p className="text-sm font-bold text-emerald-700">Semi-Retired You</p>
+            <p className="text-xs text-emerald-600">{D(i.sw2 + i.ltcg + i.qd + i.roth)} blended income</p>
+          </div>
+        </div>
+        <div className="space-y-1 mb-2">
+          {rows.map((r) => (
+            <div key={r.label} className="flex justify-between text-xs">
+              <span className="text-emerald-600">{r.label}</span>
+              <span className="font-semibold text-emerald-700">{r.val}</span>
+            </div>
+          ))}
+          <div className="flex justify-between text-xs font-bold border-t border-emerald-200 pt-1">
+            <span className="text-emerald-700">Total spending</span>
+            <span className="text-emerald-800">{D(i.sw2 + i.ltcg + i.qd + i.roth)}</span>
+          </div>
+        </div>
+        <p className="text-xs text-emerald-500">Your future: same spending, strategically sourced. Barista FIRE / part-time consulting.</p>
+      </div>
+      <div className="sm:col-span-2">
+        <p className="text-sm text-slate-500 italic text-center">Same spending. Different income mix. Dramatically different tax outcome.</p>
+      </div>
+    </div>
+  );
+}
+
+// ====== SECTION SUMMARIES ======
+function SectionSummary({ sec, filing }) {
+  const c = C[filing];
+  const t = TAX[filing];
+  if (sec === 1) {
+    const annual = c.delta;
+    return (
+      <div className="my-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+        <p className="text-sm text-emerald-800">
+          These seven advantages are available at <strong>any age</strong>. The only trigger is reducing your W-2 income enough to create room.
+          The semi-retired persona earns {D(INC[filing].sw2)} part-time and still captures most of the benefit. You don't have to go to zero — you have to go <strong>strategic</strong>.
+        </p>
+        <p className="text-sm font-bold text-emerald-700 mt-2">
+          Annual tax savings: {D(annual)} → {D(c.portfolio)} less portfolio at 4% rule.
+        </p>
+      </div>
+    );
+  }
+  if (sec === 2) {
+    return (
+      <div className="my-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+        <p className="text-sm text-amber-800">
+          This window is finite and its value is enormous. ACA subsidies alone can be worth $10K–$25K/year depending on age and location.
+          Every year between quitting and 65 where you keep your MAGI controlled is a year these advantages pay off.
+          <strong> Roth withdrawals are your primary tool</strong> for spending without triggering the ACA cliff.
+        </p>
+        <p className="text-sm font-bold text-amber-700 mt-2">
+          Estimated annual ACA value: ~{D(c.acaDelta)}. Over a 15-year pre-65 window: ~{D(c.acaDelta * 15)}.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="my-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+      <p className="text-sm text-blue-800">
+        These advantages reward the early retiree who planned ahead. If you spent your 40s and 50s doing Roth conversions in low brackets (Card 6),
+        you arrive at 65 with a large Roth pool, a low MAGI, and every advantage in this section activates without effort. The early work compounds here.
+      </p>
+      <p className="text-sm font-bold text-blue-700 mt-2">
+        Total deduction at 65+ ("“triple stack”"): {D(c.tripleStack)} of income fully sheltered.
+      </p>
+    </div>
+  );
+}
+
+// ====== BOTTOM SUMMARY ======
+function BottomSummary({ filing }) {
+  const c = C[filing];
+  const t = TAX[filing];
+  return (
+    <div className="mt-8 p-6 bg-gradient-to-br from-emerald-50 to-blue-50 border-2 border-emerald-200 rounded-xl">
+      <h3 className="text-xl font-bold text-slate-800 mb-4">The FIRE Punchline</h3>
+      <div className="space-y-3 text-sm text-slate-700">
+        <div className="flex items-start gap-3">
+          <span className="text-lg">🟢</span>
+          <p><strong>Day 1 advantages</strong> reduce your annual tax burden by <strong className="text-emerald-600">{D(c.delta)}</strong> → that's <strong className="text-emerald-600">{D(c.portfolio)} less portfolio</strong> at a 4% rule.</p>
+        </div>
+        <div className="flex items-start gap-3">
+          <span className="text-lg">🟡</span>
+          <p><strong>Pre-65 window:</strong> Preserving ACA subsidies alone is worth <strong className="text-amber-600">~{D(c.acaDelta)}/year</strong>. Over a 15-year window, that's <strong className="text-amber-600">~{D(c.acaDelta * 15)}</strong> you don't need to accumulate.</p>
+        </div>
+        <div className="flex items-start gap-3">
+          <span className="text-lg">🟠</span>
+          <p><strong>At 65+:</strong> Three more advantages unlock — and if you've been doing Roth conversions since Day 1, they activate automatically because your MAGI stays low. Total deduction shelter: <strong className="text-blue-600">{D(c.tripleStack)}</strong>.</p>
+        </div>
+      </div>
+      <div className="mt-6 p-4 bg-white rounded-lg border border-emerald-200 text-center">
+        <p className="text-lg font-bold text-slate-800">
+          Total: Going semi-retired ({TAX[filing].label}) saves
+        </p>
+        <p className="text-3xl font-black text-emerald-600 my-2">{D(c.totalAnnual)}/year</p>
+        <p className="text-sm text-slate-600">in taxes and preserved benefits</p>
+        <p className="text-lg font-bold text-emerald-700 mt-2">
+          That's {D(c.totalPortfolio)} less in your portfolio.
+        </p>
+        <p className="text-sm text-slate-500 mt-1">
+          That's how the tax code accelerates your timeline.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ====== MAIN APP ======
+function TaxAdvantageScorecard() {
+  const [filing, setFiling] = useState("single");
+  const [open, setOpen] = useState({});
+  const toggle = (id) => setOpen((o) => ({ ...o, [id]: !o[id] }));
+
+  const c = C[filing];
+  const allCards = cards(filing);
+
+  return (
+    <div className="max-w-3xl mx-auto font-sans text-slate-800 pb-12">
+      {/* STICKY HEADER */}
+      <div className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-slate-200 px-4 py-3 shadow-sm">
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFiling("single")}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${filing === "single" ? "bg-emerald-600 text-white shadow" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+            >Single</button>
+            <button
+              onClick={() => setFiling("mfj")}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${filing === "mfj" ? "bg-emerald-600 text-white shadow" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+            >Married Filing Jointly</button>
+          </div>
+          <div className="flex-1 text-center sm:text-right">
+            <p className="text-xl sm:text-2xl font-black text-emerald-600">{D(c.totalAnnual)}<span className="text-base font-bold">/yr saved</span></p>
+            <p className="text-xs text-slate-500">{D(c.totalPortfolio)} less portfolio needed at 4% rule</p>
+          </div>
+        </div>
+      </div>
+
+      {/* TITLE */}
+      <div className="px-4 pt-6 pb-2">
+        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
+          Retire Sooner Than You Think
+        </h1>
+        <p className="text-base text-slate-500 mt-1">Interactive Tax Advantage Scorecard — 2026 Numbers</p>
+        <p className="text-sm text-slate-400 mt-2 leading-relaxed">
+          The tax code has a built-in accelerator for early retirement. Twelve specific advantages reduce how much you need to save, how much you need to earn, and how long you need to work — but they only activate when you stop collecting a full paycheck. Most don't require age 65. Most don't require $0 income. They require <em>strategic</em> income.
+        </p>
+      </div>
+
+      {/* PERSONA LEGEND */}
+      <div className="px-4 pt-4">
+        <Legend filing={filing} />
+      </div>
+
+      {/* INCOME CHEAT SHEET */}
+      <div className="px-4">
+        <CheatSheet />
+      </div>
+
+      {/* ROADMAP */}
+      <div className="px-4">
+        <Roadmap />
+      </div>
+
+      {/* CARD SECTIONS */}
+      {SECTIONS.map((sec) => {
+        const cl = CLR[sec.color];
+        return (
+        <div key={sec.id} className="px-4 mt-6">
+          <div className={`border-l-4 ${cl.border4} pl-4 mb-4`}>
+            <h2 className={`text-xl font-bold ${cl.text7}`}>
+              {sec.id === 1 ? "🟢" : sec.id === 2 ? "🟡" : "🟠"} Section {sec.id}: {sec.title}
+            </h2>
+            <p className="text-sm text-slate-500">{sec.sub}</p>
+          </div>
+          {sec.cardIds.map((id) => {
+            const card = allCards.find((cd) => cd.id === id);
+            return <Card key={id} card={card} isOpen={!!open[id]} onToggle={() => toggle(id)} />;
+          })}
+          <SectionSummary sec={sec.id} filing={filing} />
+        </div>
+        );
+      })}
+
+      {/* BOTTOM SUMMARY */}
+      <div className="px-4">
+        <BottomSummary filing={filing} />
+      </div>
+
+      {/* FOOTER */}
+      <div className="px-4 mt-8 text-center">
+        <p className="text-xs text-slate-400">
+          All calculations use 2026 IRS tax parameters (post-OBBBA). ACA and Social Security estimates vary by age, location, and claiming strategy.
+          This is educational material, not personalized tax advice. Consult a tax professional for your specific situation.
+        </p>
+        <p className="text-xs text-slate-400 mt-2">
+          Built by <a href="https://retailquant.substack.com" className="text-emerald-600 underline">Retail Quant</a>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ====== RENDER ======
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<TaxAdvantageScorecard />);
+</script>
+</body>
+</html>
