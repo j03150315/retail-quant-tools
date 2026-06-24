@@ -281,29 +281,29 @@ function MagiFlowMap() {
   const tests = ["ACA MAGI", "IRMAA MAGI", "SS Combined Income", "NIIT Threshold"];
   return (
     <div className="my-4">
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">MAGI Flow Map — Which income types trigger which means tests?</p>
-      <div className="grid grid-cols-2 gap-4 sm:gap-8">
-        <div className="space-y-1.5">
-          <p className="text-xs font-semibold text-slate-400 mb-1">INCOME TYPES</p>
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 leading-normal">MAGI Flow Map — Which income types trigger which means tests?</p>
+      <div className="grid grid-cols-2 gap-4 sm:gap-8 leading-normal">
+        <div className="space-y-1.5 leading-normal">
+          <p className="text-xs font-semibold text-slate-400 mb-1 leading-normal">INCOME TYPES</p>
           {incomes.map((inc) => (
-            <div key={inc.name} className={`px-3 py-1.5 rounded text-xs font-medium border ${inc.connects ? "bg-slate-50 border-slate-200 text-slate-600" : "bg-emerald-50 border-emerald-300 text-emerald-700 font-bold"}`}>
+            <div key={inc.name} className={`px-3 py-1.5 rounded text-xs font-medium border ${inc.connects ? "bg-slate-50 border-slate-200 text-slate-600 leading-normal" : "bg-emerald-50 border-emerald-300 text-emerald-700 font-bold leading-normal"}`}>
               {inc.connects ? "" : "✓ "}{inc.name}
               {!inc.connects && <span className="ml-1 text-emerald-500">→ invisible</span>}
             </div>
           ))}
         </div>
         <div className="space-y-1.5">
-          <p className="text-xs font-semibold text-slate-400 mb-1">MEANS TESTS</p>
+          <p className="text-xs font-semibold text-slate-400 mb-1 leading-normal">MEANS TESTS</p>
           {tests.map((t) => (
             <div key={t} className="px-3 py-1.5 rounded text-xs font-medium bg-amber-50 border border-amber-200 text-amber-700">{t}</div>
           ))}
           <div className="mt-3 p-2 rounded bg-emerald-50 border border-emerald-200">
-            <p className="text-xs text-emerald-700 font-medium">Roth & HSA connect to <span className="font-bold">nothing</span>. They're invisible to every means test.</p>
+            <p className="text-xs text-emerald-700 font-medium leading-normal">Roth & HSA connect to <span className="font-bold">nothing</span>. They're invisible to every means test.</p>
           </div>
         </div>
       </div>
       <div className="hidden sm:block mt-2">
-        <p className="text-xs text-slate-400 italic">Each gray income type feeds into all four means tests on the right. The green types bypass everything.</p>
+        <p className="text-xs text-slate-400 italic leading-normal">Each gray income type feeds into all four means tests on the right. The green types bypass everything.</p>
       </div>
     </div>
   );
@@ -325,24 +325,24 @@ function Card({ card, isOpen, onToggle }) {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
           <div className="bg-slate-50 rounded px-3 py-2">
-            <p className="text-xs text-slate-400 font-medium">👔 Full W-2</p>
-            <p className="text-sm font-semibold text-slate-600">{card.w2.val}</p>
-            <p className="text-xs text-slate-400">{card.w2.lbl}</p>
+            <p className="text-xs text-slate-400 font-medium leading-normal">👔 Full W-2</p>
+            <p className="text-sm font-semibold text-slate-600 leading-normal">{card.w2.val}</p>
+            <p className="text-xs text-slate-400 leading-normal">{card.w2.lbl}</p>
           </div>
           <div className="bg-emerald-50 rounded px-3 py-2">
-            <p className="text-xs text-emerald-500 font-medium">🌱 Semi-Retired</p>
-            <p className="text-sm font-semibold text-emerald-700">{card.semi.val}</p>
-            <p className="text-xs text-emerald-500">{card.semi.lbl}</p>
+            <p className="text-xs text-emerald-500 font-medium leading-normal">🌱 Semi-Retired</p>
+            <p className="text-sm font-semibold text-emerald-700 leading-normal">{card.semi.val}</p>
+            <p className="text-xs text-emerald-500 leading-normal">{card.semi.lbl}</p>
           </div>
           <div className={`rounded px-3 py-2 flex flex-col justify-center ${isQual ? "bg-blue-50" : "bg-emerald-100"}`}>
-            <p className="text-xs text-slate-500 font-medium">Delta</p>
-            <p className={`text-lg font-bold ${isQual ? "text-blue-600" : "text-emerald-600"}`}>{card.delta.val}</p>
-            <p className="text-xs text-slate-500">{card.delta.lbl}</p>
+            <p className="text-xs text-slate-500 font-medium leading-normal">Delta</p>
+            <p className={`text-lg font-bold ${isQual ? "text-blue-600 leading-normal" : "text-emerald-600 leading-normal"}`}>{card.delta.val}</p>
+            <p className="text-xs text-slate-500 leading-normal">{card.delta.lbl}</p>
           </div>
         </div>
       </button>
       <div className="px-4 pb-2">
-        <p className="text-sm text-slate-500 italic">{card.line}</p>
+        <p className="text-sm text-slate-500 italic leading-normal">{card.line}</p>
       </div>
       {isOpen && (
         <div className="border-t border-slate-100 px-4 py-3 bg-slate-50 space-y-3">
@@ -385,7 +385,7 @@ function CheatSheet() {
   return (
     <div className="mb-8">
       <h3 className="text-lg font-bold text-slate-800 mb-1">Income Type Cheat Sheet</h3>
-      <p className="text-sm text-slate-500 mb-3">Not all income is created equal. The same $20,000 hits your tax situation completely differently depending on where it comes from.</p>
+      <p className="text-sm text-slate-500 mb-3 leading-normal">Not all income is created equal. The same $20,000 hits your tax situation completely differently depending on where it comes from.</p>
       <div className="overflow-x-auto -mx-4 px-4">
         <table className="w-full text-xs border-collapse min-w-[600px]">
           <thead>
@@ -435,10 +435,10 @@ function Roadmap() {
           return (
             <div key={p.label} className="flex-1 relative">
               <div className={`rounded-lg border-2 ${cl.border2} ${cl.bg} p-4 text-center`}>
-                <p className="text-2xl mb-1">{p.emoji}</p>
-                <p className={`text-sm font-bold ${cl.text7}`}>{p.label}</p>
-                <p className={`text-2xl font-black ${cl.text6} my-1`}>{p.count}</p>
-                <p className={`text-xs ${cl.text6}`}>{p.desc}</p>
+                <p className="text-2xl mb-1 leading-normal">{p.emoji}</p>
+                <p className={`text-sm font-bold leading-normal ${cl.text7}`}>{p.label}</p>
+                <p className={`text-2xl font-black leading-normal ${cl.text6} my-1`}>{p.count}</p>
+                <p className={`text-xs leading-normal ${cl.text6}`}>{p.desc}</p>
               </div>
               {i < 2 && <div className="hidden sm:block absolute top-1/2 -right-2 text-slate-300 text-lg">→</div>}
             </div>
@@ -465,18 +465,18 @@ function Legend({ filing }) {
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xl">👔</span>
           <div>
-            <p className="text-sm font-bold text-slate-700">Full Salary</p>
-            <p className="text-xs text-slate-500">{D(i.w2)} W-2 income</p>
+            <p className="text-sm font-bold text-slate-700 leading-normal">Full Salary</p>
+            <p className="text-xs text-slate-500 leading-normal">{D(i.w2)} W-2 income</p>
           </div>
         </div>
-        <p className="text-xs text-slate-400">Your present: all income from one paycheck, taxed at ordinary rates + FICA on every dollar.</p>
+        <p className="text-xs text-slate-400 leading-normal">Your present: all income from one paycheck, taxed at ordinary rates + FICA on every dollar.</p>
       </div>
       <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-4">
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xl">🌱</span>
           <div>
-            <p className="text-sm font-bold text-emerald-700">Semi-Retired You</p>
-            <p className="text-xs text-emerald-600">{D(i.sw2 + i.ltcg + i.qd + i.roth)} blended income</p>
+            <p className="text-sm font-bold text-emerald-700 leading-normal">Semi-Retired You</p>
+            <p className="text-xs text-emerald-600 leading-normal">{D(i.sw2 + i.ltcg + i.qd + i.roth)} blended income</p>
           </div>
         </div>
         <div className="space-y-1 mb-2">
@@ -491,10 +491,10 @@ function Legend({ filing }) {
             <span className="text-emerald-800">{D(i.sw2 + i.ltcg + i.qd + i.roth)}</span>
           </div>
         </div>
-        <p className="text-xs text-emerald-500">Your future: same spending, strategically sourced. Barista FIRE / part-time consulting.</p>
+        <p className="text-xs text-emerald-500 leading-normal">Your future: same spending, strategically sourced. Barista FIRE / part-time consulting.</p>
       </div>
       <div className="sm:col-span-2">
-        <p className="text-sm text-slate-500 italic text-center">Same spending. Different income mix. Dramatically different tax outcome.</p>
+        <p className="text-sm text-slate-500 italic text-center leading-normal">Same spending. Different income mix. Dramatically different tax outcome.</p>
       </div>
     </div>
   );
@@ -508,11 +508,11 @@ function SectionSummary({ sec, filing }) {
     const annual = c.delta;
     return (
       <div className="my-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
-        <p className="text-sm text-emerald-800">
+        <p className="text-sm text-emerald-800 leading-normal">
           These seven advantages are available at <strong>any age</strong>. The only trigger is reducing your W-2 income enough to create room.
           The semi-retired persona earns {D(INC[filing].sw2)} part-time and still captures most of the benefit. You don't have to go to zero — you have to go <strong>strategic</strong>.
         </p>
-        <p className="text-sm font-bold text-emerald-700 mt-2">
+        <p className="text-sm font-bold text-emerald-700 mt-2 leading-normal">
           Annual tax savings: {D(annual)} → {D(c.portfolio)} less portfolio at 4% rule.
         </p>
       </div>
@@ -520,25 +520,25 @@ function SectionSummary({ sec, filing }) {
   }
   if (sec === 2) {
     return (
-      <div className="my-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-        <p className="text-sm text-amber-800">
+      <div className="my-4 p-4 bg-amber-50 border border-amber-200 rounded-lg leading-normal">
+        <p className="text-sm text-amber-800 leading-normal">
           This window is finite and its value is enormous. ACA subsidies alone can be worth $10K–$25K/year depending on age and location.
           Every year between quitting and 65 where you keep your MAGI controlled is a year these advantages pay off.
           <strong> Roth withdrawals are your primary tool</strong> for spending without triggering the ACA cliff.
         </p>
-        <p className="text-sm font-bold text-amber-700 mt-2">
+        <p className="text-sm font-bold text-amber-700 mt-2 leading-normal">
           Estimated annual ACA value: ~{D(c.acaDelta)}. Over a 15-year pre-65 window: ~{D(c.acaDelta * 15)}.
         </p>
       </div>
     );
   }
   return (
-    <div className="my-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-      <p className="text-sm text-blue-800">
+    <div className="my-4 p-4 bg-blue-50 border border-blue-200 rounded-lg leading-normal">
+      <p className="text-sm text-blue-800 leading-normal">
         These advantages reward the early retiree who planned ahead. If you spent your 40s and 50s doing Roth conversions in low brackets (Card 6),
         you arrive at 65 with a large Roth pool, a low MAGI, and every advantage in this section activates without effort. The early work compounds here.
       </p>
-      <p className="text-sm font-bold text-blue-700 mt-2">
+      <p className="text-sm font-bold text-blue-700 mt-2 leading-normal">
         Total deduction at 65+ ("“triple stack”"): {D(c.tripleStack)} of income fully sheltered.
       </p>
     </div>
@@ -567,15 +567,15 @@ function BottomSummary({ filing }) {
         </div>
       </div>
       <div className="mt-6 p-4 bg-white rounded-lg border border-emerald-200 text-center">
-        <p className="text-lg font-bold text-slate-800">
+        <p className="text-lg font-bold text-slate-800 leading-normal">
           Total: Going semi-retired ({TAX[filing].label}) saves
         </p>
-        <p className="text-3xl font-black text-emerald-600 my-2">{D(c.totalAnnual)}/year</p>
-        <p className="text-sm text-slate-600">in taxes and preserved benefits</p>
-        <p className="text-lg font-bold text-emerald-700 mt-2">
+        <p className="text-3xl font-black text-emerald-600 my-2 leading-normal">{D(c.totalAnnual)}/year</p>
+        <p className="text-sm text-slate-600 leading-normal">in taxes and preserved benefits</p>
+        <p className="text-lg font-bold text-emerald-700 mt-2 leading-normal">
           That's {D(c.totalPortfolio)} less in your portfolio.
         </p>
-        <p className="text-sm text-slate-500 mt-1">
+        <p className="text-sm text-slate-500 mt-1 leading-normal">
           That's how the tax code accelerates your timeline.
         </p>
       </div>
@@ -608,8 +608,8 @@ function TaxAdvantageScorecard() {
             >Married Filing Jointly</button>
           </div>
           <div className="flex-1 text-center sm:text-right">
-            <p className="text-xl sm:text-2xl font-black text-emerald-600">{D(c.totalAnnual)}<span className="text-base font-bold">/yr saved</span></p>
-            <p className="text-xs text-slate-500">{D(c.totalPortfolio)} less portfolio needed at 4% rule</p>
+            <p className="text-xl sm:text-2xl font-black text-emerald-600 leading-normal">{D(c.totalAnnual)}<span className="text-base font-bold">/yr saved</span></p>
+            <p className="text-xs text-slate-500 leading-normal">{D(c.totalPortfolio)} less portfolio needed at 4% rule</p>
           </div>
         </div>
       </div>
@@ -619,8 +619,8 @@ function TaxAdvantageScorecard() {
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
           Retire Sooner Than You Think
         </h1>
-        <p className="text-base text-slate-500 mt-1">Interactive Tax Advantage Scorecard — 2026 Numbers</p>
-        <p className="text-sm text-slate-400 mt-2 leading-relaxed">
+        <p className="text-base text-slate-500 mt-1 leading-normal">Interactive Tax Advantage Scorecard — 2026 Numbers</p>
+        <p className="text-sm text-slate-400 mt-2 leading-relaxed leading-normal">
           The tax code has a built-in accelerator for early retirement. Twelve specific advantages reduce how much you need to save, how much you need to earn, and how long you need to work — but they only activate when you stop collecting a full paycheck. Most don't require age 65. Most don't require $0 income. They require <em>strategic</em> income.
         </p>
       </div>
@@ -649,7 +649,7 @@ function TaxAdvantageScorecard() {
             <h2 className={`text-xl font-bold ${cl.text7}`}>
               {sec.id === 1 ? "🟢" : sec.id === 2 ? "🟡" : "🟠"} Section {sec.id}: {sec.title}
             </h2>
-            <p className="text-sm text-slate-500">{sec.sub}</p>
+            <p className="text-sm text-slate-500 leading-normal">{sec.sub}</p>
           </div>
           {sec.cardIds.map((id) => {
             const card = allCards.find((cd) => cd.id === id);
@@ -667,11 +667,11 @@ function TaxAdvantageScorecard() {
 
       {/* FOOTER */}
       <div className="px-4 mt-8 text-center">
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-slate-400 leading-normal">
           All calculations use 2026 IRS tax parameters (post-OBBBA). ACA and Social Security estimates vary by age, location, and claiming strategy.
           This is educational material, not personalized tax advice. Consult a tax professional for your specific situation.
         </p>
-        <p className="text-xs text-slate-400 mt-2">
+        <p className="text-xs text-slate-400 mt-2 leading-normal">
           Built by <a href="https://retailquant.substack.com" className="text-emerald-600 underline">Retail Quant</a>
         </p>
       </div>
