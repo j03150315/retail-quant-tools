@@ -1,672 +1,673 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FIRE Tax Advantage Calculator</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="text/babel">
-      const { useState, useMemo } = React;
 
-      // ═══════════════════════════════════════════════════════════
-      // 2026 FEDERAL TAX CONSTANTS (Verified)
-      // ═══════════════════════════════════════════════════════════
-      const STD_DED = { single: 16100, mfj: 32200, hoh: 24150 };
-      const SENIOR_DED = { single: 2050, hoh: 2050, mfj: 1650 };
-      const OBBBA_AMT = 6000;
-      const OBBBA_PHASEOUT = { single: 75000, mfj: 150000, hoh: 75000 };
-      const CG_0_CEIL = { single: 49450, mfj: 98900, hoh: 66250 };
-      const CG_15_CEIL = { single: 492300, mfj: 553850, hoh: 523050 };
-      const BRACKETS = {
-        single: [[0.10, 12400], [0.12, 47550], [0.22, 103350], [0.24, 197300], [0.32, 252525], [0.35, 629900], [0.37, Infinity]],
-        mfj:    [[0.10, 24800], [0.12, 95100], [0.22, 206700], [0.24, 394600], [0.32, 505050], [0.35, 755300], [0.37, Infinity]],
-        hoh:    [[0.10, 17600], [0.12, 64150], [0.22, 103350], [0.24, 197300], [0.32, 252525], [0.35, 629900], [0.37, Infinity]],
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FIRE Tax Advantage Calculator</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+
+    // ═══════════════════════════════════════════════════════════
+    // 2026 FEDERAL TAX CONSTANTS (Verified)
+    // ═══════════════════════════════════════════════════════════
+    const STD_DED = { single: 16100, mfj: 32200, hoh: 24150 };
+    const SENIOR_DED = { single: 2050, hoh: 2050, mfj: 1650 };
+    const OBBBA_AMT = 6000;
+    const OBBBA_PHASEOUT = { single: 75000, mfj: 150000, hoh: 75000 };
+    const CG_0_CEIL = { single: 49450, mfj: 98900, hoh: 66250 };
+    const CG_15_CEIL = { single: 492300, mfj: 553850, hoh: 523050 };
+    const BRACKETS = {
+      single: [[0.10, 12400], [0.12, 47550], [0.22, 103350], [0.24, 197300], [0.32, 252525], [0.35, 629900], [0.37, Infinity]],
+      mfj: [[0.10, 24800], [0.12, 95100], [0.22, 206700], [0.24, 394600], [0.32, 505050], [0.35, 755300], [0.37, Infinity]],
+      hoh: [[0.10, 17600], [0.12, 64150], [0.22, 103350], [0.24, 197300], [0.32, 252525], [0.35, 629900], [0.37, Infinity]],
+    };
+    const FICA_RATE = 0.0765;
+    const SS_THRESH = { single: [25000, 34000], mfj: [32000, 44000], hoh: [25000, 34000] };
+    const NIIT_THRESH = { single: 200000, mfj: 250000, hoh: 200000 };
+    const NIIT_RATE = 0.038;
+    const IRMAA_THRESH = { single: 106000, mfj: 212000, hoh: 106000 };
+    const IRMAA_TIER1 = 1148;
+    const ACA_400FPL = { 1: 62600, 2: 81760, 3: 104880, 4: 128600 };
+    const ACA_EST_LOW = 6000;
+    const ACA_EST_HIGH = 15000;
+
+    // ═══════════════════════════════════════════════════════════
+    // TAX MATH
+    // ═══════════════════════════════════════════════════════════
+    function calcOrdinaryTax(taxableOrd, status) {
+      if (taxableOrd <= 0) return 0;
+      let tax = 0, prev = 0;
+      for (const [rate, ceiling] of BRACKETS[status]) {
+        if (taxableOrd <= prev) break;
+        tax += (Math.min(taxableOrd, ceiling) - prev) * rate;
+        prev = ceiling;
+      }
+      return tax;
+    }
+
+    function calcCapGainsTax(gains, taxableOrd, status) {
+      if (gains <= 0) return 0;
+      let tax = 0, remaining = gains;
+      const room0 = Math.max(0, CG_0_CEIL[status] - taxableOrd);
+      remaining -= Math.min(remaining, room0);
+      const room15 = Math.max(0, CG_15_CEIL[status] - Math.max(taxableOrd, CG_0_CEIL[status]));
+      const at15 = Math.min(remaining, room15);
+      tax += at15 * 0.15;
+      remaining -= at15;
+      tax += remaining * 0.20;
+      return tax;
+    }
+
+    function calcTaxableSS(ss, nonSSAgi, status) {
+      if (ss <= 0) return 0;
+      const combined = nonSSAgi + 0.5 * ss;
+      const [t1, t2] = SS_THRESH[status];
+      if (combined <= t1) return 0;
+      if (combined <= t2) return Math.min(0.5 * ss, 0.5 * (combined - t1));
+      const base = Math.min(0.5 * ss, 0.5 * (t2 - t1));
+      return Math.min(0.85 * ss, base + 0.85 * (combined - t2));
+    }
+
+    function marginalRate(taxableOrd, status) {
+      if (taxableOrd <= 0) return 0;
+      for (const [rate, ceiling] of BRACKETS[status]) {
+        if (taxableOrd <= ceiling) return rate;
+      }
+      return 0.37;
+    }
+
+    function runScenario(w2, inc, status, seniors, hhSize) {
+      const nonSSAgi = w2 + inc.capGains + inc.qualDivs + inc.rothConv + inc.otherOrd;
+      const taxSS = calcTaxableSS(inc.socialSec, nonSSAgi, status);
+      const agi = nonSSAgi + taxSS;
+
+      let deductions = STD_DED[status];
+      if (seniors > 0) {
+        deductions += seniors * (status === "mfj" ? SENIOR_DED.mfj : (SENIOR_DED[status] || SENIOR_DED.single));
+      }
+      let obbbaDed = 0;
+      if (seniors > 0 && agi <= OBBBA_PHASEOUT[status]) {
+        obbbaDed = seniors * OBBBA_AMT;
+        deductions += obbbaDed;
+      }
+
+      const grossOrdinary = w2 + inc.rothConv + inc.otherOrd + taxSS;
+      const grossGains = inc.capGains + inc.qualDivs;
+
+      const taxableOrd = Math.max(0, grossOrdinary - deductions);
+      const unusedDed = Math.max(0, deductions - grossOrdinary);
+      const taxableGains = Math.max(0, grossGains - unusedDed);
+
+      const ordTax = calcOrdinaryTax(taxableOrd, status);
+      const gainsTax = calcCapGainsTax(taxableGains, taxableOrd, status);
+      const ficaTax = w2 * FICA_RATE;
+      const niitExcess = Math.max(0, agi - NIIT_THRESH[status]);
+      const niitTax = NIIT_RATE * Math.min(grossGains, niitExcess);
+
+      const acaLimit = ACA_400FPL[hhSize] || ACA_400FPL[1];
+      return {
+        agi, taxSS, taxableOrd, taxableGains, deductions, obbbaDed,
+        ordTax, gainsTax, ficaTax, niitTax,
+        totalTax: ordTax + gainsTax + ficaTax + niitTax,
+        acaEligible: seniors === 0 && agi <= acaLimit,
+        irmaaTriggered: seniors > 0 && agi > IRMAA_THRESH[status],
+        marginal: marginalRate(taxableOrd, status),
+        grossOrdinary, grossGains,
       };
-      const FICA_RATE = 0.0765;
-      const SS_THRESH = { single: [25000, 34000], mfj: [32000, 44000], hoh: [25000, 34000] };
-      const NIIT_THRESH = { single: 200000, mfj: 250000, hoh: 200000 };
-      const NIIT_RATE = 0.038;
-      const IRMAA_THRESH = { single: 106000, mfj: 212000, hoh: 106000 };
-      const IRMAA_TIER1 = 1148;
-      const ACA_400FPL = { 1: 62600, 2: 81760, 3: 104880, 4: 128600 };
-      const ACA_EST_LOW = 6000;
-      const ACA_EST_HIGH = 15000;
+    }
 
-      // ═══════════════════════════════════════════════════════════
-      // TAX MATH
-      // ═══════════════════════════════════════════════════════════
-      function calcOrdinaryTax(taxableOrd, status) {
-        if (taxableOrd <= 0) return 0;
-        let tax = 0, prev = 0;
-        for (const [rate, ceiling] of BRACKETS[status]) {
-          if (taxableOrd <= prev) break;
-          tax += (Math.min(taxableOrd, ceiling) - prev) * rate;
-          prev = ceiling;
-        }
-        return tax;
-      }
+    // ═══════════════════════════════════════════════════════════
+    // FORMATTING
+    // ═══════════════════════════════════════════════════════════
+    const fmtDollar = (n) => "$" + Math.round(Math.abs(n)).toLocaleString("en-US");
+    const fmtPct = (n) => (n * 100).toFixed(1) + "%";
 
-      function calcCapGainsTax(gains, taxableOrd, status) {
-        if (gains <= 0) return 0;
-        let tax = 0, remaining = gains;
-        const room0 = Math.max(0, CG_0_CEIL[status] - taxableOrd);
-        remaining -= Math.min(remaining, room0);
-        const room15 = Math.max(0, CG_15_CEIL[status] - Math.max(taxableOrd, CG_0_CEIL[status]));
-        const at15 = Math.min(remaining, room15);
-        tax += at15 * 0.15;
-        remaining -= at15;
-        tax += remaining * 0.20;
-        return tax;
-      }
+    // ═══════════════════════════════════════════════════════════
+    // ADVANTAGE CARD GENERATOR
+    // ═══════════════════════════════════════════════════════════
+    function buildAdvantages(inc, status, seniors, hhSize, withW2, withoutW2) {
+      const w2 = inc.w2;
+      const hasW2 = w2 > 0;
+      const hasGains = (inc.capGains + inc.qualDivs) > 0;
+      const acaLimit = ACA_400FPL[hhSize] || ACA_400FPL[1];
+      const gainsRoom0 = Math.max(0, CG_0_CEIL[status] - withoutW2.taxableOrd);
+      const gainsAt0 = Math.min(withoutW2.taxableGains, gainsRoom0);
 
-      function calcTaxableSS(ss, nonSSAgi, status) {
-        if (ss <= 0) return 0;
-        const combined = nonSSAgi + 0.5 * ss;
-        const [t1, t2] = SS_THRESH[status];
-        if (combined <= t1) return 0;
-        if (combined <= t2) return Math.min(0.5 * ss, 0.5 * (combined - t1));
-        const base = Math.min(0.5 * ss, 0.5 * (t2 - t1));
-        return Math.min(0.85 * ss, base + 0.85 * (combined - t2));
-      }
+      const acaCrossed = seniors === 0 && withW2.agi > acaLimit && withoutW2.acaEligible;
+      const acaBothIn = seniors === 0 && withW2.acaEligible && withoutW2.acaEligible;
+      const acaBothOut = seniors === 0 && !withW2.acaEligible && !withoutW2.acaEligible;
 
-      function marginalRate(taxableOrd, status) {
-        if (taxableOrd <= 0) return 0;
-        for (const [rate, ceiling] of BRACKETS[status]) {
-          if (taxableOrd <= ceiling) return rate;
-        }
-        return 0.37;
-      }
+      const irmaaCrossed = seniors > 0 && withW2.irmaaTriggered && !withoutW2.irmaaTriggered;
+      const irmaaSavings = irmaaCrossed ? seniors * IRMAA_TIER1 : 0;
 
-      function runScenario(w2, inc, status, seniors, hhSize) {
-        const nonSSAgi = w2 + inc.capGains + inc.qualDivs + inc.rothConv + inc.otherOrd;
-        const taxSS = calcTaxableSS(inc.socialSec, nonSSAgi, status);
-        const agi = nonSSAgi + taxSS;
+      const ssPctWith = inc.socialSec > 0 ? (withW2.taxSS / inc.socialSec * 100).toFixed(0) : 0;
+      const ssPctWithout = inc.socialSec > 0 ? (withoutW2.taxSS / inc.socialSec * 100).toFixed(0) : 0;
 
-        let deductions = STD_DED[status];
-        if (seniors > 0) {
-          deductions += seniors * (status === "mfj" ? SENIOR_DED.mfj : (SENIOR_DED[status] || SENIOR_DED.single));
-        }
-        let obbbaDed = 0;
-        if (seniors > 0 && agi <= OBBBA_PHASEOUT[status]) {
-          obbbaDed = seniors * OBBBA_AMT;
-          deductions += obbbaDed;
-        }
+      const obbbaLostWithW2 = seniors > 0 && withW2.agi > OBBBA_PHASEOUT[status] && withoutW2.agi <= OBBBA_PHASEOUT[status];
 
-        const grossOrdinary = w2 + inc.rothConv + inc.otherOrd + taxSS;
-        const grossGains = inc.capGains + inc.qualDivs;
+      return [
+        {
+          id: 1,
+          title: "Standard Deduction Shelter",
+          active: true,
+          tag: "income",
+          note: hasW2
+            ? `Without a W-2, your ${fmtDollar(STD_DED[status])} deduction shelters chosen income (conversions, gains) instead of being consumed by salary.`
+            : `Your ${fmtDollar(STD_DED[status])} deduction is sheltering your chosen income sources.`,
+        },
+        {
+          id: 2,
+          title: "0% Long-Term Capital Gains",
+          active: hasGains,
+          tag: "gains",
+          note: !hasGains
+            ? "Enter capital gains above to see this advantage."
+            : hasW2
+              ? `Without your W-2, ${fmtDollar(gainsAt0)} of your ${fmtDollar(inc.capGains + inc.qualDivs)} in gains sits in the 0% bracket. With your salary, ${withW2.taxableOrd >= CG_0_CEIL[status] ? "the entire 0% bracket is filled by ordinary income" : "less room remains in the 0% bracket"}.`
+              : `${fmtDollar(gainsAt0)} of your ${fmtDollar(inc.capGains + inc.qualDivs)} in gains falls in the 0% bracket.`,
+        },
+        {
+          id: 3,
+          title: "Qualified Dividends at 0%",
+          active: inc.qualDivs > 0,
+          tag: "gains",
+          note: inc.qualDivs > 0
+            ? `Your ${fmtDollar(inc.qualDivs)} in qualified dividends gets the same 0% bracket treatment as capital gains.`
+            : "Enter qualified dividends above to see this advantage.",
+        },
+        {
+          id: 4,
+          title: "No FICA / Payroll Tax",
+          active: hasW2,
+          tag: "fica",
+          savings: hasW2 ? withW2.ficaTax : 0,
+          note: hasW2
+            ? `You skip ${fmtDollar(w2 * FICA_RATE)} in payroll taxes — 7.65% of your ${fmtDollar(w2)} salary. Investment income pays zero FICA.`
+            : "Already active — your investment income pays no FICA.",
+        },
+        {
+          id: 5,
+          title: "Roth Conversion Ladder",
+          active: inc.rothConv > 0,
+          tag: "income",
+          note: (() => {
+            if (inc.rothConv === 0) return "Enter planned Roth conversions to see this advantage.";
+            const effWithout = withoutW2.grossOrdinary > 0 ? withoutW2.ordTax / withoutW2.grossOrdinary : 0;
+            if (hasW2) {
+              return `Your ${fmtDollar(inc.rothConv)} conversion lands at ${fmtPct(withoutW2.marginal)} marginal rate without a W-2 (${fmtPct(effWithout)} effective). With your salary, it stacks at ${fmtPct(withW2.marginal)}.`;
+            }
+            return `Your ${fmtDollar(inc.rothConv)} conversion is taxed at ${fmtPct(withoutW2.marginal)} marginal rate (${fmtPct(effWithout)} effective on all ordinary income).`;
+          })(),
+        },
+        {
+          id: 6,
+          title: "ACA Premium Tax Credits",
+          active: seniors === 0,
+          tag: "aca",
+          estimated: acaCrossed,
+          note: (() => {
+            if (seniors > 0) return "ACA subsidies apply before Medicare age (65). This advantage activates when you're under 65.";
+            if (acaCrossed) return `Your MAGI drops from ${fmtDollar(withW2.agi)} to ${fmtDollar(withoutW2.agi)}, crossing under the ${fmtDollar(acaLimit)} cliff. Estimated savings: ${fmtDollar(ACA_EST_LOW)}–${fmtDollar(ACA_EST_HIGH)}/year in premiums.`;
+            if (acaBothIn) return `You qualify either way (MAGI ${fmtDollar(withoutW2.agi)} is under ${fmtDollar(acaLimit)}), but dropping the W-2 increases your subsidy.`;
+            if (acaBothOut) return `Your MAGI of ${fmtDollar(withoutW2.agi)} exceeds the ${fmtDollar(acaLimit)} cliff even without a W-2. Consider reducing Roth conversions to qualify.`;
+            return `Your MAGI of ${fmtDollar(withoutW2.agi)} is ${withoutW2.acaEligible ? "under" : "over"} the ${fmtDollar(acaLimit)} cliff.`;
+          })(),
+        },
+        {
+          id: 7,
+          title: "Social Security Taxation Reduced",
+          active: inc.socialSec > 0,
+          tag: "income",
+          note: (() => {
+            if (inc.socialSec === 0) return "Enter Social Security benefits (if receiving) to see this advantage.";
+            if (hasW2) return `Without a W-2, ${ssPctWithout}% of your SS is taxable (vs ${ssPctWith}% with your salary). That's ${fmtDollar(withW2.taxSS - withoutW2.taxSS)} less taxable SS income.`;
+            return `${ssPctWithout}% of your Social Security is taxable. Roth withdrawals don't count in this formula.`;
+          })(),
+        },
+        {
+          id: 8,
+          title: "No Net Investment Income Tax",
+          active: withW2.niitTax > 0 || withoutW2.niitTax > 0 || (withW2.agi > NIIT_THRESH[status] * 0.8),
+          tag: "niit",
+          savings: withW2.niitTax - withoutW2.niitTax,
+          note: (() => {
+            const thresh = NIIT_THRESH[status];
+            if (withW2.niitTax > 0 && withoutW2.niitTax === 0) return `Dropping your W-2 moves your MAGI from ${fmtDollar(withW2.agi)} to ${fmtDollar(withoutW2.agi)}, escaping the 3.8% surtax on investment income above ${fmtDollar(thresh)}.`;
+            if (withoutW2.niitTax > 0) return `Your MAGI of ${fmtDollar(withoutW2.agi)} still exceeds ${fmtDollar(thresh)} — NIIT applies even without a W-2.`;
+            return `Your MAGI stays well under the ${fmtDollar(thresh)} threshold. No 3.8% surtax applies.`;
+          })(),
+        },
+        {
+          id: 9,
+          title: "OBBBA Senior Bonus Deduction",
+          active: seniors > 0,
+          tag: "income",
+          note: (() => {
+            if (seniors === 0) return "Available at age 65+ (2025–2028 tax years). This adds $6,000 per qualifying person on top of the standard deduction.";
+            const amt = seniors * OBBBA_AMT;
+            if (obbbaLostWithW2) return `Without a W-2, your MAGI of ${fmtDollar(withoutW2.agi)} keeps the full ${fmtDollar(amt)} deduction. With your salary, MAGI exceeds the ${fmtDollar(OBBBA_PHASEOUT[status])} phaseout.`;
+            if (withoutW2.obbbaDed > 0) return `You qualify for ${fmtDollar(amt)} in OBBBA deductions (MAGI ${fmtDollar(withoutW2.agi)} is under the ${fmtDollar(OBBBA_PHASEOUT[status])} phaseout).`;
+            return `Your MAGI of ${fmtDollar(withoutW2.agi)} exceeds the ${fmtDollar(OBBBA_PHASEOUT[status])} phaseout even without a W-2.`;
+          })(),
+        },
+        {
+          id: 10,
+          title: "Additional Senior Standard Deduction",
+          active: seniors > 0,
+          tag: "income",
+          note: (() => {
+            if (seniors === 0) return "Available at age 65+. Adds $2,050 (single/HoH) or $1,650 per spouse (MFJ) to your standard deduction.";
+            const perPerson = status === "mfj" ? SENIOR_DED.mfj : (SENIOR_DED[status] || SENIOR_DED.single);
+            return `${fmtDollar(seniors * perPerson)} added to your standard deduction. No income phaseout — this one's permanent.`;
+          })(),
+        },
+        {
+          id: 11,
+          title: "Roth Withdrawal Invisibility",
+          active: inc.rothWd > 0,
+          tag: "roth",
+          note: inc.rothWd > 0
+            ? `Your ${fmtDollar(inc.rothWd)} in Roth withdrawals don't appear in AGI, MAGI, ACA calculations, SS taxation, or IRMAA. This is the income source that makes every other advantage on this list work harder.`
+            : "Roth withdrawals are invisible to every means test — AGI, MAGI, ACA, IRMAA, Social Security. Enter an amount to see the effect.",
+        },
+        {
+          id: 12,
+          title: "IRMAA Avoidance",
+          active: seniors > 0,
+          tag: "irmaa",
+          savings: irmaaSavings,
+          note: (() => {
+            if (seniors === 0) return "Applies at age 63+ (Medicare uses a 2-year lookback). Keeping MAGI under the threshold avoids premium surcharges.";
+            const thresh = IRMAA_THRESH[status];
+            if (irmaaCrossed) return `Without a W-2, your MAGI of ${fmtDollar(withoutW2.agi)} stays under ${fmtDollar(thresh)}. With your salary, you'd trigger ${fmtDollar(irmaaSavings)}/year in Medicare surcharges.`;
+            if (withoutW2.irmaaTriggered) return `Your MAGI of ${fmtDollar(withoutW2.agi)} exceeds ${fmtDollar(thresh)} even without a W-2. Consider reducing Roth conversions in lookback years.`;
+            return `Your MAGI of ${fmtDollar(withoutW2.agi)} is safely under the ${fmtDollar(thresh)} threshold.`;
+          })(),
+        },
+      ];
+    }
 
-        const taxableOrd = Math.max(0, grossOrdinary - deductions);
-        const unusedDed = Math.max(0, deductions - grossOrdinary);
-        const taxableGains = Math.max(0, grossGains - unusedDed);
-
-        const ordTax = calcOrdinaryTax(taxableOrd, status);
-        const gainsTax = calcCapGainsTax(taxableGains, taxableOrd, status);
-        const ficaTax = w2 * FICA_RATE;
-        const niitExcess = Math.max(0, agi - NIIT_THRESH[status]);
-        const niitTax = NIIT_RATE * Math.min(grossGains, niitExcess);
-
-        const acaLimit = ACA_400FPL[hhSize] || ACA_400FPL[1];
-        return {
-          agi, taxSS, taxableOrd, taxableGains, deductions, obbbaDed,
-          ordTax, gainsTax, ficaTax, niitTax,
-          totalTax: ordTax + gainsTax + ficaTax + niitTax,
-          acaEligible: seniors === 0 && agi <= acaLimit,
-          irmaaTriggered: seniors > 0 && agi > IRMAA_THRESH[status],
-          marginal: marginalRate(taxableOrd, status),
-          grossOrdinary, grossGains,
-        };
-      }
-
-      // ═══════════════════════════════════════════════════════════
-      // FORMATTING
-      // ═══════════════════════════════════════════════════════════
-      const fmtDollar = (n) => "$" + Math.round(Math.abs(n)).toLocaleString("en-US");
-      const fmtPct = (n) => (n * 100).toFixed(1) + "%";
-
-      // ═══════════════════════════════════════════════════════════
-      // ADVANTAGE CARD GENERATOR
-      // ═══════════════════════════════════════════════════════════
-      function buildAdvantages(inc, status, seniors, hhSize, withW2, withoutW2) {
-        const w2 = inc.w2;
-        const hasW2 = w2 > 0;
-        const hasGains = (inc.capGains + inc.qualDivs) > 0;
-        const acaLimit = ACA_400FPL[hhSize] || ACA_400FPL[1];
-        const gainsRoom0 = Math.max(0, CG_0_CEIL[status] - withoutW2.taxableOrd);
-        const gainsAt0 = Math.min(withoutW2.taxableGains, gainsRoom0);
-
-        const acaCrossed = seniors === 0 && withW2.agi > acaLimit && withoutW2.acaEligible;
-        const acaBothIn = seniors === 0 && withW2.acaEligible && withoutW2.acaEligible;
-        const acaBothOut = seniors === 0 && !withW2.acaEligible && !withoutW2.acaEligible;
-
-        const irmaaCrossed = seniors > 0 && withW2.irmaaTriggered && !withoutW2.irmaaTriggered;
-        const irmaaSavings = irmaaCrossed ? seniors * IRMAA_TIER1 : 0;
-
-        const ssPctWith = inc.socialSec > 0 ? (withW2.taxSS / inc.socialSec * 100).toFixed(0) : 0;
-        const ssPctWithout = inc.socialSec > 0 ? (withoutW2.taxSS / inc.socialSec * 100).toFixed(0) : 0;
-
-        const obbbaLostWithW2 = seniors > 0 && withW2.agi > OBBBA_PHASEOUT[status] && withoutW2.agi <= OBBBA_PHASEOUT[status];
-
-        return [
-          {
-            id: 1,
-            title: "Standard Deduction Shelter",
-            active: true,
-            tag: "income",
-            note: hasW2
-              ? `Without a W-2, your ${fmtDollar(STD_DED[status])} deduction shelters chosen income (conversions, gains) instead of being consumed by salary.`
-              : `Your ${fmtDollar(STD_DED[status])} deduction is sheltering your chosen income sources.`,
-          },
-          {
-            id: 2,
-            title: "0% Long-Term Capital Gains",
-            active: hasGains,
-            tag: "gains",
-            note: !hasGains
-              ? "Enter capital gains above to see this advantage."
-              : hasW2
-                ? `Without your W-2, ${fmtDollar(gainsAt0)} of your ${fmtDollar(inc.capGains + inc.qualDivs)} in gains sits in the 0% bracket. With your salary, ${withW2.taxableOrd >= CG_0_CEIL[status] ? "the entire 0% bracket is filled by ordinary income" : "less room remains in the 0% bracket"}.`
-                : `${fmtDollar(gainsAt0)} of your ${fmtDollar(inc.capGains + inc.qualDivs)} in gains falls in the 0% bracket.`,
-          },
-          {
-            id: 3,
-            title: "Qualified Dividends at 0%",
-            active: inc.qualDivs > 0,
-            tag: "gains",
-            note: inc.qualDivs > 0
-              ? `Your ${fmtDollar(inc.qualDivs)} in qualified dividends gets the same 0% bracket treatment as capital gains.`
-              : "Enter qualified dividends above to see this advantage.",
-          },
-          {
-            id: 4,
-            title: "No FICA / Payroll Tax",
-            active: hasW2,
-            tag: "fica",
-            savings: hasW2 ? withW2.ficaTax : 0,
-            note: hasW2
-              ? `You skip ${fmtDollar(w2 * FICA_RATE)} in payroll taxes — 7.65% of your ${fmtDollar(w2)} salary. Investment income pays zero FICA.`
-              : "Already active — your investment income pays no FICA.",
-          },
-          {
-            id: 5,
-            title: "Roth Conversion Ladder",
-            active: inc.rothConv > 0,
-            tag: "income",
-            note: (() => {
-              if (inc.rothConv === 0) return "Enter planned Roth conversions to see this advantage.";
-              const effWithout = withoutW2.grossOrdinary > 0 ? withoutW2.ordTax / withoutW2.grossOrdinary : 0;
-              if (hasW2) {
-                return `Your ${fmtDollar(inc.rothConv)} conversion lands at ${fmtPct(withoutW2.marginal)} marginal rate without a W-2 (${fmtPct(effWithout)} effective). With your salary, it stacks at ${fmtPct(withW2.marginal)}.`;
-              }
-              return `Your ${fmtDollar(inc.rothConv)} conversion is taxed at ${fmtPct(withoutW2.marginal)} marginal rate (${fmtPct(effWithout)} effective on all ordinary income).`;
-            })(),
-          },
-          {
-            id: 6,
-            title: "ACA Premium Tax Credits",
-            active: seniors === 0,
-            tag: "aca",
-            estimated: acaCrossed,
-            note: (() => {
-              if (seniors > 0) return "ACA subsidies apply before Medicare age (65). This advantage activates when you're under 65.";
-              if (acaCrossed) return `Your MAGI drops from ${fmtDollar(withW2.agi)} to ${fmtDollar(withoutW2.agi)}, crossing under the ${fmtDollar(acaLimit)} cliff. Estimated savings: ${fmtDollar(ACA_EST_LOW)}–${fmtDollar(ACA_EST_HIGH)}/year in premiums.`;
-              if (acaBothIn) return `You qualify either way (MAGI ${fmtDollar(withoutW2.agi)} is under ${fmtDollar(acaLimit)}), but dropping the W-2 increases your subsidy.`;
-              if (acaBothOut) return `Your MAGI of ${fmtDollar(withoutW2.agi)} exceeds the ${fmtDollar(acaLimit)} cliff even without a W-2. Consider reducing Roth conversions to qualify.`;
-              return `Your MAGI of ${fmtDollar(withoutW2.agi)} is ${withoutW2.acaEligible ? "under" : "over"} the ${fmtDollar(acaLimit)} cliff.`;
-            })(),
-          },
-          {
-            id: 7,
-            title: "Social Security Taxation Reduced",
-            active: inc.socialSec > 0,
-            tag: "income",
-            note: (() => {
-              if (inc.socialSec === 0) return "Enter Social Security benefits (if receiving) to see this advantage.";
-              if (hasW2) return `Without a W-2, ${ssPctWithout}% of your SS is taxable (vs ${ssPctWith}% with your salary). That's ${fmtDollar(withW2.taxSS - withoutW2.taxSS)} less taxable SS income.`;
-              return `${ssPctWithout}% of your Social Security is taxable. Roth withdrawals don't count in this formula.`;
-            })(),
-          },
-          {
-            id: 8,
-            title: "No Net Investment Income Tax",
-            active: withW2.niitTax > 0 || withoutW2.niitTax > 0 || (withW2.agi > NIIT_THRESH[status] * 0.8),
-            tag: "niit",
-            savings: withW2.niitTax - withoutW2.niitTax,
-            note: (() => {
-              const thresh = NIIT_THRESH[status];
-              if (withW2.niitTax > 0 && withoutW2.niitTax === 0) return `Dropping your W-2 moves your MAGI from ${fmtDollar(withW2.agi)} to ${fmtDollar(withoutW2.agi)}, escaping the 3.8% surtax on investment income above ${fmtDollar(thresh)}.`;
-              if (withoutW2.niitTax > 0) return `Your MAGI of ${fmtDollar(withoutW2.agi)} still exceeds ${fmtDollar(thresh)} — NIIT applies even without a W-2.`;
-              return `Your MAGI stays well under the ${fmtDollar(thresh)} threshold. No 3.8% surtax applies.`;
-            })(),
-          },
-          {
-            id: 9,
-            title: "OBBBA Senior Bonus Deduction",
-            active: seniors > 0,
-            tag: "income",
-            note: (() => {
-              if (seniors === 0) return "Available at age 65+ (2025–2028 tax years). This adds $6,000 per qualifying person on top of the standard deduction.";
-              const amt = seniors * OBBBA_AMT;
-              if (obbbaLostWithW2) return `Without a W-2, your MAGI of ${fmtDollar(withoutW2.agi)} keeps the full ${fmtDollar(amt)} deduction. With your salary, MAGI exceeds the ${fmtDollar(OBBBA_PHASEOUT[status])} phaseout.`;
-              if (withoutW2.obbbaDed > 0) return `You qualify for ${fmtDollar(amt)} in OBBBA deductions (MAGI ${fmtDollar(withoutW2.agi)} is under the ${fmtDollar(OBBBA_PHASEOUT[status])} phaseout).`;
-              return `Your MAGI of ${fmtDollar(withoutW2.agi)} exceeds the ${fmtDollar(OBBBA_PHASEOUT[status])} phaseout even without a W-2.`;
-            })(),
-          },
-          {
-            id: 10,
-            title: "Additional Senior Standard Deduction",
-            active: seniors > 0,
-            tag: "income",
-            note: (() => {
-              if (seniors === 0) return "Available at age 65+. Adds $2,050 (single/HoH) or $1,650 per spouse (MFJ) to your standard deduction.";
-              const perPerson = status === "mfj" ? SENIOR_DED.mfj : (SENIOR_DED[status] || SENIOR_DED.single);
-              return `${fmtDollar(seniors * perPerson)} added to your standard deduction. No income phaseout — this one's permanent.`;
-            })(),
-          },
-          {
-            id: 11,
-            title: "Roth Withdrawal Invisibility",
-            active: inc.rothWd > 0,
-            tag: "roth",
-            note: inc.rothWd > 0
-              ? `Your ${fmtDollar(inc.rothWd)} in Roth withdrawals don't appear in AGI, MAGI, ACA calculations, SS taxation, or IRMAA. This is the income source that makes every other advantage on this list work harder.`
-              : "Roth withdrawals are invisible to every means test — AGI, MAGI, ACA, IRMAA, Social Security. Enter an amount to see the effect.",
-          },
-          {
-            id: 12,
-            title: "IRMAA Avoidance",
-            active: seniors > 0,
-            tag: "irmaa",
-            savings: irmaaSavings,
-            note: (() => {
-              if (seniors === 0) return "Applies at age 63+ (Medicare uses a 2-year lookback). Keeping MAGI under the threshold avoids premium surcharges.";
-              const thresh = IRMAA_THRESH[status];
-              if (irmaaCrossed) return `Without a W-2, your MAGI of ${fmtDollar(withoutW2.agi)} stays under ${fmtDollar(thresh)}. With your salary, you'd trigger ${fmtDollar(irmaaSavings)}/year in Medicare surcharges.`;
-              if (withoutW2.irmaaTriggered) return `Your MAGI of ${fmtDollar(withoutW2.agi)} exceeds ${fmtDollar(thresh)} even without a W-2. Consider reducing Roth conversions in lookback years.`;
-              return `Your MAGI of ${fmtDollar(withoutW2.agi)} is safely under the ${fmtDollar(thresh)} threshold.`;
-            })(),
-          },
-        ];
-      }
-
-      // ═══════════════════════════════════════════════════════════
-      // UI COMPONENTS
-      // ═══════════════════════════════════════════════════════════
-      function CurrencyInput({ label, value, onChange, hint }) {
-        return (
-          <div className="flex flex-col gap-0.5">
-            <label className="text-sm font-medium text-gray-600">{label}</label>
-            <div className="relative">
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                className="w-full pl-6 pr-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                placeholder="0"
-                value={value === "" || value === "0" ? "" : Number(value).toLocaleString("en-US")}
-                onChange={(e) => {
-                  const raw = e.target.value.replace(/[^0-9]/g, "");
-                  onChange(raw === "" ? "0" : raw);
-                }}
-              />
-            </div>
-            {hint && <span className="text-xs text-gray-400 leading-tight">{hint}</span>}
+    // ═══════════════════════════════════════════════════════════
+    // UI COMPONENTS
+    // ═══════════════════════════════════════════════════════════
+    function CurrencyInput({ label, value, onChange, hint }) {
+      return (
+        <div className="flex flex-col gap-0.5">
+          <label className="text-sm font-medium text-gray-600">{label}</label>
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="w-full pl-6 pr-3 py-2 border border-gray-300 rounded-lg text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+              placeholder="0"
+              value={value === "" || value === "0" ? "" : Number(value).toLocaleString("en-US")}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^0-9]/g, "");
+                onChange(raw === "" ? "0" : raw);
+              }}
+            />
           </div>
-        );
-      }
+          {hint && <span className="text-xs text-gray-400 leading-tight">{hint}</span>}
+        </div>
+      );
+    }
 
-      function Pill({ label, active, onClick }) {
-        return (
-          <button
-            onClick={onClick}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              active
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+    function Pill({ label, active, onClick }) {
+      return (
+        <button
+          onClick={onClick}
+          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${active
+              ? "bg-blue-600 text-white"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
-          >
-            {label}
-          </button>
-        );
-      }
+        >
+          {label}
+        </button>
+      );
+    }
 
-      function StatusIcon({ active }) {
-        if (active) return <span className="text-emerald-500 text-lg">●</span>;
-        return <span className="text-amber-400 text-lg">◐</span>;
-      }
+    function StatusIcon({ active }) {
+      if (active) return <span className="text-emerald-500 text-lg">●</span>;
+      return <span className="text-amber-400 text-lg">◐</span>;
+    }
 
-      function AdvantageCard({ adv, hasW2 }) {
-        const showSavings = adv.savings !== undefined && adv.savings > 0;
-        const isInfo = adv.tag === "income" || adv.tag === "gains" || adv.tag === "roth";
-        const tagLabels = {
-          income: "Included in income tax savings",
-          gains: "Included in capital gains savings",
-          fica: null,
-          aca: null,
-          niit: null,
-          irmaa: null,
-          roth: "Amplifies other advantages",
-        };
+    function AdvantageCard({ adv, hasW2 }) {
+      const showSavings = adv.savings !== undefined && adv.savings > 0;
+      const isInfo = adv.tag === "income" || adv.tag === "gains" || adv.tag === "roth";
+      const tagLabels = {
+        income: "Included in income tax savings",
+        gains: "Included in capital gains savings",
+        fica: null,
+        aca: null,
+        niit: null,
+        irmaa: null,
+        roth: "Amplifies other advantages",
+      };
 
-        return (
-          <div className={`p-4 rounded-xl border transition-colors ${
-            adv.active ? "bg-white border-gray-200" : "bg-gray-50 border-gray-100"
+      return (
+        <div className={`p-4 rounded-xl border transition-colors ${adv.active ? "bg-white border-gray-200" : "bg-gray-50 border-gray-100"
           }`}>
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5">
-                <StatusIcon active={adv.active} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                  <h3 className={`font-semibold text-sm ${adv.active ? "text-gray-900" : "text-gray-400"}`}>
-                    {adv.id}. {adv.title}
-                  </h3>
-                  {showSavings && (
-                    <span className="text-emerald-600 font-bold text-sm whitespace-nowrap">
-                      {fmtDollar(adv.savings)}/yr
-                    </span>
-                  )}
-                  {adv.estimated && (
-                    <span className="text-amber-600 font-semibold text-sm whitespace-nowrap">
-                      ~{fmtDollar(ACA_EST_LOW)}–{fmtDollar(ACA_EST_HIGH)}/yr
-                    </span>
-                  )}
-                </div>
-                <p className={`text-xs mt-1 leading-relaxed ${adv.active ? "text-gray-600" : "text-gray-400"}`}>
-                  {adv.note}
-                </p>
-                {isInfo && adv.active && tagLabels[adv.tag] && (
-                  <span className="inline-block mt-1.5 text-[10px] uppercase tracking-wider text-blue-500 font-semibold">
-                    {tagLabels[adv.tag]}
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5">
+              <StatusIcon active={adv.active} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                <h3 className={`font-semibold text-sm ${adv.active ? "text-gray-900" : "text-gray-400"}`}>
+                  {adv.id}. {adv.title}
+                </h3>
+                {showSavings && (
+                  <span className="text-emerald-600 font-bold text-sm whitespace-nowrap">
+                    {fmtDollar(adv.savings)}/yr
+                  </span>
+                )}
+                {adv.estimated && (
+                  <span className="text-amber-600 font-semibold text-sm whitespace-nowrap">
+                    ~{fmtDollar(ACA_EST_LOW)}–{fmtDollar(ACA_EST_HIGH)}/yr
                   </span>
                 )}
               </div>
+              <p className={`text-xs mt-1 leading-relaxed ${adv.active ? "text-gray-600" : "text-gray-400"}`}>
+                {adv.note}
+              </p>
+              {isInfo && adv.active && tagLabels[adv.tag] && (
+                <span className="inline-block mt-1.5 text-[10px] uppercase tracking-wider text-blue-500 font-semibold">
+                  {tagLabels[adv.tag]}
+                </span>
+              )}
             </div>
           </div>
-        );
-      }
+        </div>
+      );
+    }
 
-      // ═══════════════════════════════════════════════════════════
-      // MAIN COMPONENT
-      // ═══════════════════════════════════════════════════════════
-      function FIRETaxCalculator() {
-        const [status, setStatus] = useState("single");
-        const [ageGroup, setAgeGroup] = useState("under65");
-        const [hhSize, setHhSize] = useState(1);
-        const [inputs, setInputs] = useState({
-          w2: "0", capGains: "0", qualDivs: "0", rothConv: "0",
-          socialSec: "0", rothWd: "0", otherOrd: "0",
-        });
+    // ═══════════════════════════════════════════════════════════
+    // MAIN COMPONENT
+    // ═══════════════════════════════════════════════════════════
+    function FIRETaxCalculator() {
+      const [status, setStatus] = useState("single");
+      const [ageGroup, setAgeGroup] = useState("under65");
+      const [hhSize, setHhSize] = useState(1);
+      const [inputs, setInputs] = useState({
+        w2: "0", capGains: "0", qualDivs: "0", rothConv: "0",
+        socialSec: "0", rothWd: "0", otherOrd: "0",
+      });
 
-        const set = (field) => (val) => setInputs((p) => ({ ...p, [field]: val }));
+      const set = (field) => (val) => setInputs((p) => ({ ...p, [field]: val }));
 
-        const inc = useMemo(() => ({
-          w2: parseInt(inputs.w2) || 0,
-          capGains: parseInt(inputs.capGains) || 0,
-          qualDivs: parseInt(inputs.qualDivs) || 0,
-          rothConv: parseInt(inputs.rothConv) || 0,
-          socialSec: parseInt(inputs.socialSec) || 0,
-          rothWd: parseInt(inputs.rothWd) || 0,
-          otherOrd: parseInt(inputs.otherOrd) || 0,
-        }), [inputs]);
+      const inc = useMemo(() => ({
+        w2: parseInt(inputs.w2) || 0,
+        capGains: parseInt(inputs.capGains) || 0,
+        qualDivs: parseInt(inputs.qualDivs) || 0,
+        rothConv: parseInt(inputs.rothConv) || 0,
+        socialSec: parseInt(inputs.socialSec) || 0,
+        rothWd: parseInt(inputs.rothWd) || 0,
+        otherOrd: parseInt(inputs.otherOrd) || 0,
+      }), [inputs]);
 
-        const seniors = ageGroup === "both65" ? 2 : ageGroup === "one65" || ageGroup === "65plus" ? 1 : 0;
+      const seniors = ageGroup === "both65" ? 2 : ageGroup === "one65" || ageGroup === "65plus" ? 1 : 0;
 
-        const handleStatus = (s) => {
-          setStatus(s);
-          if (s === "mfj") {
-            setHhSize(2);
-            if (ageGroup === "65plus") setAgeGroup("one65");
-          } else {
-            if (ageGroup === "one65" || ageGroup === "both65") setAgeGroup("65plus");
-          }
-        };
+      const handleStatus = (s) => {
+        setStatus(s);
+        if (s === "mfj") {
+          setHhSize(2);
+          if (ageGroup === "65plus") setAgeGroup("one65");
+        } else {
+          if (ageGroup === "one65" || ageGroup === "both65") setAgeGroup("65plus");
+        }
+      };
 
-        const withW2 = useMemo(() => runScenario(inc.w2, inc, status, seniors, hhSize), [inc, status, seniors, hhSize]);
-        const withoutW2 = useMemo(() => runScenario(0, inc, status, seniors, hhSize), [inc, status, seniors, hhSize]);
+      const withW2 = useMemo(() => runScenario(inc.w2, inc, status, seniors, hhSize), [inc, status, seniors, hhSize]);
+      const withoutW2 = useMemo(() => runScenario(0, inc, status, seniors, hhSize), [inc, status, seniors, hhSize]);
 
-        const advantages = useMemo(
-          () => buildAdvantages(inc, status, seniors, hhSize, withW2, withoutW2),
-          [inc, status, seniors, hhSize, withW2, withoutW2]
-        );
+      const advantages = useMemo(
+        () => buildAdvantages(inc, status, seniors, hhSize, withW2, withoutW2),
+        [inc, status, seniors, hhSize, withW2, withoutW2]
+      );
 
-        const ficaSavings = withW2.ficaTax;
-        const incomeTaxSavings = withW2.ordTax - withoutW2.ordTax;
-        const gainsTaxSavings = withW2.gainsTax - withoutW2.gainsTax;
-        const niitSavings = withW2.niitTax - withoutW2.niitTax;
-        const acaCrossed = seniors === 0 && withW2.agi > (ACA_400FPL[hhSize] || ACA_400FPL[1]) && withoutW2.acaEligible;
-        const acaMidpoint = acaCrossed ? (ACA_EST_LOW + ACA_EST_HIGH) / 2 : 0;
-        const irmaaCrossed = seniors > 0 && withW2.irmaaTriggered && !withoutW2.irmaaTriggered;
-        const irmaaSavings = irmaaCrossed ? seniors * IRMAA_TIER1 : 0;
+      const ficaSavings = withW2.ficaTax;
+      const incomeTaxSavings = withW2.ordTax - withoutW2.ordTax;
+      const gainsTaxSavings = withW2.gainsTax - withoutW2.gainsTax;
+      const niitSavings = withW2.niitTax - withoutW2.niitTax;
+      const acaCrossed = seniors === 0 && withW2.agi > (ACA_400FPL[hhSize] || ACA_400FPL[1]) && withoutW2.acaEligible;
+      const acaMidpoint = acaCrossed ? (ACA_EST_LOW + ACA_EST_HIGH) / 2 : 0;
+      const irmaaCrossed = seniors > 0 && withW2.irmaaTriggered && !withoutW2.irmaaTriggered;
+      const irmaaSavings = irmaaCrossed ? seniors * IRMAA_TIER1 : 0;
 
-        const directSavings = ficaSavings + incomeTaxSavings + gainsTaxSavings + niitSavings;
-        const estimatedExtras = acaMidpoint + irmaaSavings;
-        const totalSavings = directSavings + estimatedExtras;
+      const directSavings = ficaSavings + incomeTaxSavings + gainsTaxSavings + niitSavings;
+      const estimatedExtras = acaMidpoint + irmaaSavings;
+      const totalSavings = directSavings + estimatedExtras;
 
-        const hasW2 = inc.w2 > 0;
-        const hasAnyIncome = Object.values(inc).some(v => v > 0);
-        const activeCount = advantages.filter(a => a.active).length;
+      const hasW2 = inc.w2 > 0;
+      const hasAnyIncome = Object.values(inc).some(v => v > 0);
+      const activeCount = advantages.filter(a => a.active).length;
 
-        return (
-          <div className="max-w-2xl mx-auto p-4 space-y-6 font-sans">
-            {/* Header */}
-            <div className="text-center space-y-1">
-              <h1 className="text-2xl font-bold text-gray-900">
-                FIRE Tax Advantage Calculator
-              </h1>
-              <p className="text-sm text-gray-500">
-                What $0 earned income unlocks · 2026 federal numbers
-              </p>
-            </div>
+      return (
+        <div className="max-w-2xl mx-auto p-4 space-y-6 font-sans">
+          {/* Header */}
+          <div className="text-center space-y-1">
+            <h1 className="text-2xl font-bold text-gray-900">
+              FIRE Tax Advantage Calculator
+            </h1>
+            <p className="text-sm text-gray-500">
+              What $0 earned income unlocks · 2026 federal numbers
+            </p>
+          </div>
 
-            {/* Inputs */}
-            <div className="space-y-5 p-5 bg-gray-50 rounded-2xl">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-gray-700">Filing Status</label>
-                <div className="flex flex-wrap gap-2">
-                  <Pill label="Single" active={status === "single"} onClick={() => handleStatus("single")} />
-                  <Pill label="Married Filing Jointly" active={status === "mfj"} onClick={() => handleStatus("mfj")} />
-                  <Pill label="Head of Household" active={status === "hoh"} onClick={() => handleStatus("hoh")} />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-gray-700">Age</label>
-                <div className="flex flex-wrap gap-2">
-                  {status === "mfj" ? (
-                    <>
-                      <Pill label="Both under 65" active={ageGroup === "under65"} onClick={() => setAgeGroup("under65")} />
-                      <Pill label="One spouse 65+" active={ageGroup === "one65"} onClick={() => setAgeGroup("one65")} />
-                      <Pill label="Both 65+" active={ageGroup === "both65"} onClick={() => setAgeGroup("both65")} />
-                    </>
-                  ) : (
-                    <>
-                      <Pill label="Under 65" active={ageGroup === "under65"} onClick={() => setAgeGroup("under65")} />
-                      <Pill label="65 or older" active={ageGroup === "65plus"} onClick={() => setAgeGroup("65plus")} />
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {seniors === 0 && (
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700">Household Size <span className="font-normal text-gray-400">(for ACA subsidy cliff)</span></label>
-                  <div className="flex gap-2">
-                    {[1, 2, 3, 4].map(n => (
-                      <Pill key={n} label={String(n)} active={hhSize === n} onClick={() => setHhSize(n)} />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-1">
-                <label className="text-sm font-semibold text-gray-700">Your Income</label>
-                <p className="text-xs text-gray-400 mb-3">
-                  Enter your current W-2 salary plus other income sources. The calculator compares "with paycheck" vs "without."
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <CurrencyInput label="Current W-2 Salary" value={inputs.w2} onChange={set("w2")} hint="Annual gross. Enter $0 if already FIRE'd." />
-                  <CurrencyInput label="Long-Term Capital Gains" value={inputs.capGains} onChange={set("capGains")} hint="Expected annual realized gains" />
-                  <CurrencyInput label="Qualified Dividends" value={inputs.qualDivs} onChange={set("qualDivs")} hint="Most U.S. stock dividends held >60 days" />
-                  <CurrencyInput label="Roth Conversions (planned)" value={inputs.rothConv} onChange={set("rothConv")} hint="Traditional → Roth conversion amount" />
-                  <CurrencyInput label="Social Security Benefits" value={inputs.socialSec} onChange={set("socialSec")} hint="Annual benefit, if receiving" />
-                  <CurrencyInput label="Roth Withdrawals" value={inputs.rothWd} onChange={set("rothWd")} hint="Tax-free and invisible to means tests" />
-                  <CurrencyInput label="Other Ordinary Income" value={inputs.otherOrd} onChange={set("otherOrd")} hint="Rental, freelance, interest, etc." />
-                </div>
+          {/* Inputs */}
+          <div className="space-y-5 p-5 bg-gray-50 rounded-2xl">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700">Filing Status</label>
+              <div className="flex flex-wrap gap-2">
+                <Pill label="Single" active={status === "single"} onClick={() => handleStatus("single")} />
+                <Pill label="Married Filing Jointly" active={status === "mfj"} onClick={() => handleStatus("mfj")} />
+                <Pill label="Head of Household" active={status === "hoh"} onClick={() => handleStatus("hoh")} />
               </div>
             </div>
 
-            {/* Summary Card */}
-            {hasW2 && (
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50 to-emerald-50 border border-blue-100">
-                <div className="text-center space-y-1">
-                  <p className="text-sm text-gray-500 font-medium">
-                    Dropping your W-2 saves an estimated
-                  </p>
-                  <p className="text-4xl font-bold text-emerald-700">
-                    {fmtDollar(totalSavings)}
-                    <span className="text-lg font-normal text-gray-400">/year</span>
-                  </p>
-                  {estimatedExtras > 0 && (
-                    <p className="text-xs text-gray-400">
-                      Includes ~{fmtDollar(estimatedExtras)} in estimated ACA/IRMAA savings
-                    </p>
-                  )}
-                </div>
-                <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2 text-center">
-                  {ficaSavings > 0 && (
-                    <div className="p-2 bg-white/60 rounded-lg">
-                      <p className="text-xs text-gray-500">FICA</p>
-                      <p className="font-semibold text-sm text-gray-800">{fmtDollar(ficaSavings)}</p>
-                    </div>
-                  )}
-                  {incomeTaxSavings > 0 && (
-                    <div className="p-2 bg-white/60 rounded-lg">
-                      <p className="text-xs text-gray-500">Income Tax</p>
-                      <p className="font-semibold text-sm text-gray-800">{fmtDollar(incomeTaxSavings)}</p>
-                    </div>
-                  )}
-                  {gainsTaxSavings > 0 && (
-                    <div className="p-2 bg-white/60 rounded-lg">
-                      <p className="text-xs text-gray-500">Cap Gains Tax</p>
-                      <p className="font-semibold text-sm text-gray-800">{fmtDollar(gainsTaxSavings)}</p>
-                    </div>
-                  )}
-                  {niitSavings > 0 && (
-                    <div className="p-2 bg-white/60 rounded-lg">
-                      <p className="text-xs text-gray-500">NIIT</p>
-                      <p className="font-semibold text-sm text-gray-800">{fmtDollar(niitSavings)}</p>
-                    </div>
-                  )}
-                  {acaMidpoint > 0 && (
-                    <div className="p-2 bg-white/60 rounded-lg">
-                      <p className="text-xs text-gray-500">ACA Premiums</p>
-                      <p className="font-semibold text-sm text-amber-600">~{fmtDollar(acaMidpoint)}</p>
-                    </div>
-                  )}
-                  {irmaaSavings > 0 && (
-                    <div className="p-2 bg-white/60 rounded-lg">
-                      <p className="text-xs text-gray-500">IRMAA</p>
-                      <p className="font-semibold text-sm text-amber-600">~{fmtDollar(irmaaSavings)}</p>
-                    </div>
-                  )}
-                </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700">Age</label>
+              <div className="flex flex-wrap gap-2">
+                {status === "mfj" ? (
+                  <>
+                    <Pill label="Both under 65" active={ageGroup === "under65"} onClick={() => setAgeGroup("under65")} />
+                    <Pill label="One spouse 65+" active={ageGroup === "one65"} onClick={() => setAgeGroup("one65")} />
+                    <Pill label="Both 65+" active={ageGroup === "both65"} onClick={() => setAgeGroup("both65")} />
+                  </>
+                ) : (
+                  <>
+                    <Pill label="Under 65" active={ageGroup === "under65"} onClick={() => setAgeGroup("under65")} />
+                    <Pill label="65 or older" active={ageGroup === "65plus"} onClick={() => setAgeGroup("65plus")} />
+                  </>
+                )}
               </div>
-            )}
+            </div>
 
-            {/* No W-2 state */}
-            {!hasW2 && hasAnyIncome && (
-              <div className="p-5 rounded-2xl bg-gray-50 border border-gray-200 text-center space-y-2">
-                <p className="text-sm text-gray-600 font-medium">
-                  {activeCount} of 12 advantages are active for your situation
-                </p>
-                <p className="text-xs text-gray-400">
-                  Enter a W-2 salary above to see how much a paycheck would cost you in lost tax advantages.
-                </p>
-              </div>
-            )}
-
-            {/* Prompt to enter income */}
-            {!hasAnyIncome && (
-              <div className="p-5 rounded-2xl bg-blue-50 border border-blue-100 text-center space-y-2">
-                <p className="text-sm text-blue-700 font-medium">
-                  Enter your income above to see your personalized scorecard
-                </p>
-                <p className="text-xs text-blue-400">
-                  Start with your W-2 salary + one other source to see the comparison.
-                </p>
-              </div>
-            )}
-
-            {/* The 12 Advantages */}
-            {hasAnyIncome && (
-              <div className="space-y-3">
-                <h2 className="text-lg font-bold text-gray-800">
-                  Your 12-Advantage Scorecard
-                </h2>
-                <div className="space-y-2">
-                  {advantages.map((adv) => (
-                    <AdvantageCard key={adv.id} adv={adv} hasW2={hasW2} />
+            {seniors === 0 && (
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-700">Household Size <span className="font-normal text-gray-400">(for ACA subsidy cliff)</span></label>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4].map(n => (
+                    <Pill key={n} label={String(n)} active={hhSize === n} onClick={() => setHhSize(n)} />
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Side-by-side comparison */}
-            {hasW2 && (
-              <div className="p-5 rounded-2xl bg-white border border-gray-200 space-y-3">
-                <h2 className="text-sm font-bold text-gray-700">Side-by-Side Tax Comparison</h2>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="space-y-2">
-                    <p className="font-semibold text-red-600 text-xs uppercase tracking-wider">With W-2</p>
-                    <div className="space-y-1">
-                      <div className="flex justify-between"><span className="text-gray-500">MAGI</span><span>{fmtDollar(withW2.agi)}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-500">Income tax</span><span>{fmtDollar(withW2.ordTax)}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-500">Cap gains tax</span><span>{fmtDollar(withW2.gainsTax)}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-500">FICA</span><span>{fmtDollar(withW2.ficaTax)}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-500">NIIT</span><span>{fmtDollar(withW2.niitTax)}</span></div>
-                      <hr className="border-gray-200" />
-                      <div className="flex justify-between font-bold"><span>Total tax</span><span className="text-red-600">{fmtDollar(withW2.totalTax)}</span></div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="font-semibold text-emerald-600 text-xs uppercase tracking-wider">Without W-2</p>
-                    <div className="space-y-1">
-                      <div className="flex justify-between"><span className="text-gray-500">MAGI</span><span>{fmtDollar(withoutW2.agi)}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-500">Income tax</span><span>{fmtDollar(withoutW2.ordTax)}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-500">Cap gains tax</span><span>{fmtDollar(withoutW2.gainsTax)}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-500">FICA</span><span>{fmtDollar(0)}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-500">NIIT</span><span>{fmtDollar(withoutW2.niitTax)}</span></div>
-                      <hr className="border-gray-200" />
-                      <div className="flex justify-between font-bold"><span>Total tax</span><span className="text-emerald-600">{fmtDollar(withoutW2.totalTax)}</span></div>
-                    </div>
-                  </div>
-                </div>
-                {inc.rothWd > 0 && (
-                  <p className="text-xs text-gray-400 mt-2">
-                    Note: Your {fmtDollar(inc.rothWd)} in Roth withdrawals provide spending power in both scenarios but don't appear in either MAGI figure.
+            <div className="space-y-1">
+              <label className="text-sm font-semibold text-gray-700">Your Income</label>
+              <p className="text-xs text-gray-400 mb-3">
+                Enter your current W-2 salary plus other income sources. The calculator compares "with paycheck" vs "without."
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <CurrencyInput label="Current W-2 Salary" value={inputs.w2} onChange={set("w2")} hint="Annual gross. Enter $0 if already FIRE'd." />
+                <CurrencyInput label="Long-Term Capital Gains" value={inputs.capGains} onChange={set("capGains")} hint="Expected annual realized gains" />
+                <CurrencyInput label="Qualified Dividends" value={inputs.qualDivs} onChange={set("qualDivs")} hint="Most U.S. stock dividends held >60 days" />
+                <CurrencyInput label="Roth Conversions (planned)" value={inputs.rothConv} onChange={set("rothConv")} hint="Traditional → Roth conversion amount" />
+                <CurrencyInput label="Social Security Benefits" value={inputs.socialSec} onChange={set("socialSec")} hint="Annual benefit, if receiving" />
+                <CurrencyInput label="Roth Withdrawals" value={inputs.rothWd} onChange={set("rothWd")} hint="Tax-free and invisible to means tests" />
+                <CurrencyInput label="Other Ordinary Income" value={inputs.otherOrd} onChange={set("otherOrd")} hint="Rental, freelance, interest, etc." />
+              </div>
+            </div>
+          </div>
+
+          {/* Summary Card */}
+          {hasW2 && (
+            <div className="p-5 rounded-2xl bg-linear-to-br from-blue-50 to-emerald-50 border border-blue-100">
+              <div className="text-center space-y-1">
+                <p className="text-sm text-gray-500 font-medium">
+                  Dropping your W-2 saves an estimated
+                </p>
+                <p className="text-4xl font-bold text-emerald-700">
+                  {fmtDollar(totalSavings)}
+                  <span className="text-lg font-normal text-gray-400">/year</span>
+                </p>
+                {estimatedExtras > 0 && (
+                  <p className="text-xs text-gray-400">
+                    Includes ~{fmtDollar(estimatedExtras)} in estimated ACA/IRMAA savings
                   </p>
                 )}
               </div>
-            )}
-
-            {/* Footer */}
-            <div className="text-center text-[11px] text-gray-300 space-y-1 pt-2">
-              <p>2026 federal estimates only. State taxes, AMT, and phase-outs beyond OBBBA not modeled.</p>
-              <p>ACA premium savings are rough estimates — actual values depend on age, state, and plan tier.</p>
-              <p>IRMAA uses first-tier surcharge only. Higher tiers add more.</p>
-              <p className="pt-1 text-gray-400">Built for Retail Quant · retailquant.substack.com</p>
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2 text-center">
+                {ficaSavings > 0 && (
+                  <div className="p-2 bg-white/60 rounded-lg">
+                    <p className="text-xs text-gray-500">FICA</p>
+                    <p className="font-semibold text-sm text-gray-800">{fmtDollar(ficaSavings)}</p>
+                  </div>
+                )}
+                {incomeTaxSavings > 0 && (
+                  <div className="p-2 bg-white/60 rounded-lg">
+                    <p className="text-xs text-gray-500">Income Tax</p>
+                    <p className="font-semibold text-sm text-gray-800">{fmtDollar(incomeTaxSavings)}</p>
+                  </div>
+                )}
+                {gainsTaxSavings > 0 && (
+                  <div className="p-2 bg-white/60 rounded-lg">
+                    <p className="text-xs text-gray-500">Cap Gains Tax</p>
+                    <p className="font-semibold text-sm text-gray-800">{fmtDollar(gainsTaxSavings)}</p>
+                  </div>
+                )}
+                {niitSavings > 0 && (
+                  <div className="p-2 bg-white/60 rounded-lg">
+                    <p className="text-xs text-gray-500">NIIT</p>
+                    <p className="font-semibold text-sm text-gray-800">{fmtDollar(niitSavings)}</p>
+                  </div>
+                )}
+                {acaMidpoint > 0 && (
+                  <div className="p-2 bg-white/60 rounded-lg">
+                    <p className="text-xs text-gray-500">ACA Premiums</p>
+                    <p className="font-semibold text-sm text-amber-600">~{fmtDollar(acaMidpoint)}</p>
+                  </div>
+                )}
+                {irmaaSavings > 0 && (
+                  <div className="p-2 bg-white/60 rounded-lg">
+                    <p className="text-xs text-gray-500">IRMAA</p>
+                    <p className="font-semibold text-sm text-amber-600">~{fmtDollar(irmaaSavings)}</p>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        );
-      }
+          )}
 
-      ReactDOM.createRoot(document.getElementById("root")).render(<FIRETaxCalculator />);
-    </script>
-  </body>
+          {/* No W-2 state */}
+          {!hasW2 && hasAnyIncome && (
+            <div className="p-5 rounded-2xl bg-gray-50 border border-gray-200 text-center space-y-2">
+              <p className="text-sm text-gray-600 font-medium">
+                {activeCount} of 12 advantages are active for your situation
+              </p>
+              <p className="text-xs text-gray-400">
+                Enter a W-2 salary above to see how much a paycheck would cost you in lost tax advantages.
+              </p>
+            </div>
+          )}
+
+          {/* Prompt to enter income */}
+          {!hasAnyIncome && (
+            <div className="p-5 rounded-2xl bg-blue-50 border border-blue-100 text-center space-y-2">
+              <p className="text-sm text-blue-700 font-medium">
+                Enter your income above to see your personalized scorecard
+              </p>
+              <p className="text-xs text-blue-400">
+                Start with your W-2 salary + one other source to see the comparison.
+              </p>
+            </div>
+          )}
+
+          {/* The 12 Advantages */}
+          {hasAnyIncome && (
+            <div className="space-y-3">
+              <h2 className="text-lg font-bold text-gray-800">
+                Your 12-Advantage Scorecard
+              </h2>
+              <div className="space-y-2">
+                {advantages.map((adv) => (
+                  <AdvantageCard key={adv.id} adv={adv} hasW2={hasW2} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Side-by-side comparison */}
+          {hasW2 && (
+            <div className="p-5 rounded-2xl bg-white border border-gray-200 space-y-3">
+              <h2 className="text-sm font-bold text-gray-700">Side-by-Side Tax Comparison</h2>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="space-y-2">
+                  <p className="font-semibold text-red-600 text-xs uppercase tracking-wider">With W-2</p>
+                  <div className="space-y-1">
+                    <div className="flex justify-between"><span className="text-gray-500">MAGI</span><span>{fmtDollar(withW2.agi)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Income tax</span><span>{fmtDollar(withW2.ordTax)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Cap gains tax</span><span>{fmtDollar(withW2.gainsTax)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">FICA</span><span>{fmtDollar(withW2.ficaTax)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">NIIT</span><span>{fmtDollar(withW2.niitTax)}</span></div>
+                    <hr className="border-gray-200" />
+                    <div className="flex justify-between font-bold"><span>Total tax</span><span className="text-red-600">{fmtDollar(withW2.totalTax)}</span></div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-semibold text-emerald-600 text-xs uppercase tracking-wider">Without W-2</p>
+                  <div className="space-y-1">
+                    <div className="flex justify-between"><span className="text-gray-500">MAGI</span><span>{fmtDollar(withoutW2.agi)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Income tax</span><span>{fmtDollar(withoutW2.ordTax)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Cap gains tax</span><span>{fmtDollar(withoutW2.gainsTax)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">FICA</span><span>{fmtDollar(0)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">NIIT</span><span>{fmtDollar(withoutW2.niitTax)}</span></div>
+                    <hr className="border-gray-200" />
+                    <div className="flex justify-between font-bold"><span>Total tax</span><span className="text-emerald-600">{fmtDollar(withoutW2.totalTax)}</span></div>
+                  </div>
+                </div>
+              </div>
+              {inc.rothWd > 0 && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Note: Your {fmtDollar(inc.rothWd)} in Roth withdrawals provide spending power in both scenarios but don't appear in either MAGI figure.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="text-center text-[11px] text-gray-300 space-y-1 pt-2">
+            <p>2026 federal estimates only. State taxes, AMT, and phase-outs beyond OBBBA not modeled.</p>
+            <p>ACA premium savings are rough estimates — actual values depend on age, state, and plan tier.</p>
+            <p>IRMAA uses first-tier surcharge only. Higher tiers add more.</p>
+            <p className="pt-1 text-gray-400">Built for Retail Quant · retailquant.substack.com</p>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<FIRETaxCalculator />);
+  </script>
+</body>
+
 </html>
