@@ -318,11 +318,10 @@ function Pill({ label, active, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-        active
+      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${active
           ? "bg-blue-600 text-white"
           : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-      }`}
+        }`}
     >
       {label}
     </button>
@@ -350,9 +349,8 @@ function AdvantageCard({ adv, hasW2 }) {
   };
 
   return (
-    <div className={`p-4 rounded-xl border transition-colors ${
-      adv.active ? "bg-white border-gray-200" : "bg-gray-50 border-gray-100"
-    }`}>
+    <div className={`p-4 rounded-xl border transition-colors ${adv.active ? "bg-white border-gray-200" : "bg-gray-50 border-gray-100"
+      }`}>
       <div className="flex items-start gap-3">
         <div className="mt-0.5">
           <StatusIcon active={adv.active} applicable={true} />
@@ -527,7 +525,7 @@ export default function FIRETaxCalculator() {
 
       {/* Summary Card */}
       {hasW2 && (
-        <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50 to-emerald-50 border border-blue-100">
+        <div className="p-5 rounded-2xl bg-linear-to-br from-blue-50 to-emerald-50 border border-blue-100">
           <div className="text-center space-y-1">
             <p className="text-sm text-gray-500 font-medium">
               Dropping your W-2 saves an estimated
